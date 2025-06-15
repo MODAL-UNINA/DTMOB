@@ -1,21 +1,6 @@
-from pathlib import Path
 from typing import Any, TypedDict
 
 import matplotlib
-
-from api.general.utils.error_status import ErrorStatus
-from api.general.utils.image import get_base64_image
-from api.general.views import (
-    get_area_id,
-    get_hour_slots_items,
-    get_zone_dict,
-)
-
-from .data import (
-    DistanceData,
-    WhatIfDataDictMapping,
-    WhatIfLoadedData,
-)
 
 matplotlib.use("agg")
 
@@ -26,52 +11,52 @@ import numpy as np
 import pandas as pd
 from django.http import HttpRequest
 
+from api.general.utils.error_status import ErrorStatus
+from api.general.utils.image import get_base64_gif, get_base64_image
+from api.general.views import get_area_id, get_hour_slots_items, get_zone_dict
+
 from .backend import (
     FloatArray,
     GenerationData,
+    ReturnDict,
     create_cumulative_plot,
     create_heatmap,
     create_histograms_with_inset,
     create_radar_chart_map,
     get_generation,
-    get_gif,
+    is_data_kind_valid,
     prepare_generated_data,
 )
-from .startup import whatif_data_store
+from .data import DATA_KINDS, SCENARIOS, WhatIfDataKind, WhatIfScenarioType
+from .startup import get_data
 
 
-def get_available_whatif_date_range(data_dict: WhatIfDataDictMapping) -> dict[str, str]:
-    dates_split = [s.split(" - ") for s in data_dict.keys()]
+def get_scenario(scenario: str) -> WhatIfScenarioType | ErrorStatus:
+    if scenario not in SCENARIOS:
+        return ErrorStatus(error=f"Invalid scenario '{scenario}'.")
+    return scenario
 
+
+def validate_data_kind(
+    kind: str, scenario: WhatIfScenarioType | None
+) -> WhatIfDataKind | ErrorStatus:
+    if scenario is None:
+        return ErrorStatus(error="Scenario is required.")
+    if kind not in DATA_KINDS:
+        return ErrorStatus(error=f"Invalid kind '{kind}'.")
+
+    if not is_data_kind_valid(kind, scenario):
+        return ErrorStatus(
+            error=f"Kind '{kind}' is not valid for scenario '{scenario}'."
+        )
+    return kind
+
+
+def get_available_whatif_scenario_dates() -> dict[str, str]:
     return dict(
-        min_date=min([v[0] for v in dates_split]),
-        max_date=max([v[1] for v in dates_split]),
+        min_date=get_data()["data"]["start_date"],
+        max_date=get_data()["data"]["end_date"],
     )
-
-
-def get_whatif_data() -> WhatIfLoadedData:
-    return whatif_data_store["data"]
-
-
-def get_whatif_data_path() -> Path:
-    return whatif_data_store["data_path"]
-
-
-def get_whatif_data_dict(scenario: str) -> WhatIfDataDictMapping:
-    return get_whatif_data()["scenarios"][scenario]["dict_data"]
-
-
-def get_distances_p() -> DistanceData:
-    return get_whatif_data()["distances_p"]
-
-
-def get_distances_s() -> DistanceData:
-    return get_whatif_data()["distances_s"]
-
-
-def get_available_whatif_scenario_dates(scenario: str) -> dict[str, str]:
-    data_dict = get_whatif_data_dict(scenario)
-    return get_available_whatif_date_range(data_dict)
 
 
 def get_quantity(quantity_s: str | None) -> int | None:
@@ -89,7 +74,7 @@ class GenerationResult(TypedDict):
 
 def run_generation(
     request: HttpRequest,
-    scenario: str,
+    scenario: WhatIfScenarioType,
     zone_name: str,
     date: pd.Timestamp,
     quantity: int | None,
@@ -110,18 +95,16 @@ def run_generation(
     ans_time = f"{datetime.now()}"
     print(f"[{ans_time}] {head_msg} - loading data")
 
-    data = get_whatif_data()
-
-    data_path = get_whatif_data_path()
-    distances_p = get_distances_p()
-    distances_s = get_distances_s()
+    whatif_data = get_data()
+    data = whatif_data["data"]
+    data_path = whatif_data["data_path"]
 
     ans_time = f"{datetime.now()}"
     print(f"[{ans_time}] {head_msg} - generating data")
     import torch.multiprocessing as mp
 
     manager = mp.Manager()
-    return_dict = manager.dict()
+    return_dict: ReturnDict = manager.dict()
 
     p = mp.Process(
         target=get_generation,
@@ -135,31 +118,24 @@ def run_generation(
             data,
             zone_dict,
             zones,
-            distances_p,
-            distances_s,
         ),
     )
     p.start()
     p.join()
 
-    msg: str
-    res, msg = return_dict["generation"]
+    res = return_dict["generation"]
 
     ans_time = f"{datetime.now()}"
     print(f"[{ans_time}] {head_msg} - cleaning up")
 
-    if msg:
-        return ErrorStatus(error=msg)
+    if isinstance(res, dict):
+        return res
 
     ans_time = f"{datetime.now()}"
     print(f"[{ans_time}] {head_msg} - parsing generation")
-    (key_found, output) = res
+    key_found, output, data_key = res
 
     date_str = date.strftime("%Y-%m-%d")
-
-    data_dict = data["scenarios"][scenario]["dict_data"]
-
-    data_key = data_dict[key_found]
 
     data_real_t = data_key["data"]
     data_real_t = data_real_t.permute(0, 2, 1, 3, 4)
@@ -268,7 +244,7 @@ class SavedData(TypedDict):
 
 def get_saved_generation(
     request: HttpRequest,
-    scenario: str,
+    scenario: WhatIfScenarioType,
     zone_name: str,
     date: pd.Timestamp,
     quantity: int | None,
@@ -320,11 +296,11 @@ def get_saved_generation(
 
 def get_whatif_heatmaps(
     request: HttpRequest,
-    scenario: str,
+    scenario: WhatIfScenarioType,
     zone_name: str,
     date: pd.Timestamp,
     quantity: int | None,
-    kind: str,
+    kind: WhatIfDataKind,
     selected_day: str,
 ) -> ErrorStatus | dict[str, str]:
     saved_data = get_saved_generation(request, scenario, zone_name, date, quantity)
@@ -345,7 +321,7 @@ def get_whatif_heatmaps(
         return out_real
     figs_real = out_real
 
-    figs_real, img_str_real = get_gif(figs_real)
+    figs_real, img_str_real = get_base64_gif(figs_real)
 
     for fig in figs_real:
         plt.close(fig)
@@ -358,7 +334,7 @@ def get_whatif_heatmaps(
         return out_gen
     figs_gen = out_gen
 
-    figs_gen, img_str_gen = get_gif(figs_gen)
+    figs_gen, img_str_gen = get_base64_gif(figs_gen)
 
     for fig in figs_gen:
         plt.close(fig)
@@ -368,11 +344,11 @@ def get_whatif_heatmaps(
 
 def get_whatif_distributions(
     request: HttpRequest,
-    scenario: str,
+    scenario: WhatIfScenarioType,
     zone_name: str,
     date: pd.Timestamp,
     quantity: int | None,
-    kind: str,
+    kind: WhatIfDataKind,
 ) -> ErrorStatus | dict[str, str]:
     saved_data = get_saved_generation(request, scenario, zone_name, date, quantity)
     if saved_data is None:
@@ -405,11 +381,11 @@ def get_whatif_distributions(
 
 def get_whatif_cumulative_plot(
     request: HttpRequest,
-    scenario: str,
+    scenario: WhatIfScenarioType,
     zone_name: str,
     date: pd.Timestamp,
     quantity: int | None,
-    kind: str,
+    kind: WhatIfDataKind,
     selected_adjacent_zone: str,
 ) -> ErrorStatus | dict[str, str]:
     saved_data = get_saved_generation(request, scenario, zone_name, date, quantity)

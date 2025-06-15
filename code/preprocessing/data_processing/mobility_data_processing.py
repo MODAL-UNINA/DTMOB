@@ -326,7 +326,11 @@ def generate_slot_data(df_final: pd.DataFrame, freq: str = "h") -> pd.DataFrame:
             "time", inplace=True
         )
         resampled_group = (
-            group.resample("1h")["occupied"].sum().reset_index(name="occupied")
+            group.resample(  # type: ignore
+                "1h"
+            )["occupied"]
+            .sum()
+            .reset_index(name="occupied")
         )
         resampled_group["numeroStallo"] = slot_number
         resampled_data_list.append(  # type: ignore
@@ -406,7 +410,7 @@ def generate_road_data(df_final: pd.DataFrame, slots: pd.DataFrame) -> pd.DataFr
     snapshot_df["numeroStallo"] = snapshot_df["numeroStallo"].astype(int)
 
     # Merge slot metadata (to associate each slot with a road)
-    snapshot_df = snapshot_df.merge(
+    snapshot_df = snapshot_df.merge(  # type: ignore
         slots[["numeroStallo", "id_strada"]],
         left_on="numeroStallo",
         right_on="numeroStallo",

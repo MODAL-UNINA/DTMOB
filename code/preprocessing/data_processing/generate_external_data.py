@@ -368,10 +368,14 @@ def download_weather(
         hourly_data = {
             "date": pd.date_range(  # type: ignore
                 start=pd.to_datetime(  # type: ignore
-                    hourly.Time(), unit="s", utc=True
+                    hourly.Time(),  # type: ignore
+                    unit="s",
+                    utc=True,
                 ),
                 end=pd.to_datetime(  # type: ignore
-                    hourly.TimeEnd(), unit="s", utc=True
+                    hourly.TimeEnd(),  # type: ignore
+                    unit="s",
+                    utc=True,
                 ),
                 freq=pd.Timedelta(seconds=hourly.Interval()),
                 inclusive="left",

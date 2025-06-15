@@ -27,8 +27,29 @@ SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ["DJANGO_DEBUG"] == "1"
 
-ALLOWED_HOSTS = os.environ["DJANGO_ALLOWED_HOSTS"].split(",")
+_DJANGO_PROTOCOL_HOST_PORT = [
+    s.split(":") for s in os.environ["DJANGO_PROTOCOL_HOST_PORT"].split(",")
+]
 
+if not _DJANGO_PROTOCOL_HOST_PORT:
+    raise ValueError(
+        "DJANGO_PROTOCOL_HOST_PORT environment variable is not set or is empty."
+    )
+
+if any(len(host_port) != 3 for host_port in _DJANGO_PROTOCOL_HOST_PORT):
+    raise ValueError(
+        "DJANGO_PROTOCOL_HOST_PORT environment variable must be in the format "
+        " 'protocol:host:port,protocol:host:port'."
+    )
+
+if any(not host_port[0] for host_port in _DJANGO_PROTOCOL_HOST_PORT):
+    raise ValueError("Protocol in DJANGO_PROTOCOL_HOST_PORT cannot be empty.")
+if any(not host_port[1] for host_port in _DJANGO_PROTOCOL_HOST_PORT):
+    raise ValueError("Host in DJANGO_PROTOCOL_HOST_PORT cannot be empty.")
+if any(not host_port[2].isdigit() for host_port in _DJANGO_PROTOCOL_HOST_PORT):
+    raise ValueError("Port in DJANGO_PROTOCOL_HOST_PORT must be a valid integer.")
+
+ALLOWED_HOSTS = [host for _, host, _ in _DJANGO_PROTOCOL_HOST_PORT]
 
 # Application definition
 
@@ -41,11 +62,11 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "frontend",
     "api.general",
-    "api.map",
-    "api.distrib",
-    "api.stats",
     "api.agent_calendar",
+    "api.distrib",
     "api.forecast",
+    "api.map",
+    "api.stats",
     "api.whatif",
 ]
 
@@ -74,7 +95,7 @@ TEMPLATES = [  # type: ignore
                 "django.contrib.messages.context_processors.messages",
             ],
         },
-    },
+    }
 ]
 
 WSGI_APPLICATION = "DTMOB_webapp.wsgi.application"
@@ -115,7 +136,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = "UTC"
+TIME_ZONE = os.environ["TZ"]
 
 USE_I18N = True
 
@@ -127,10 +148,7 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 
-STATICFILES_DIRS = [
-    BASE_DIR / "staticfiles",
-    BASE_DIR / "static",
-]
+STATICFILES_DIRS = [BASE_DIR / "staticfiles", BASE_DIR / "static"]
 
 
 # Default primary key field type
@@ -141,7 +159,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 STATIC_ROOT = BASE_DIR.parent / "static"
 
 # CSRF settings
-CSRF_TRUSTED_ORIGINS = os.environ["DJANGO_CSRF_TRUSTED_ORIGINS"].split(",")
+CSRF_TRUSTED_ORIGINS = [
+    f"{conn}://{host}:{port}" for conn, host, port in _DJANGO_PROTOCOL_HOST_PORT
+]
 
 SESSION_COOKIE_AGE = 4 * 60 * 60
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False

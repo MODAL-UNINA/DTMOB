@@ -12,7 +12,7 @@ from api.general.views import get_zone_dict
 
 from .backend import do_get_prediction, get_date_range
 from .data import ForecastDataType
-from .startup import data_store as forecasting_data_store
+from .startup import get_data
 
 
 class AvailableDatetimes(TypedDict):
@@ -38,8 +38,11 @@ class ForecastRoadResult(TypedDict):
 
 
 def get_available_forecasting_dates() -> AvailableDates | ErrorStatus:
-    model_args = forecasting_data_store["forecast_data"]["model_args"]
-    preprocessed_data = forecasting_data_store["preprocessed_data"]
+    from typing import cast
+
+    forecast_data = get_data()
+    model_args = forecast_data["forecast_data"]["model_args"]
+    preprocessed_data = forecast_data["preprocessed_data"]
     hourly_scaled_map = preprocessed_data["hourly_scaled"]
 
     out_date = AvailableDatetimes(
@@ -56,19 +59,19 @@ def get_available_forecasting_dates() -> AvailableDates | ErrorStatus:
             model_args=model_args,
         )
         if "error" in date_range:
-            return ErrorStatus(error=date_range["error"])
+            return cast(ErrorStatus, date_range)
 
         min_date = date_range["min_date"]
         max_date = date_range["max_date"]
 
-        if out_date["min_date"] < min_date:
+        if min_date > out_date["min_date"]:
             out_date["min_date"] = min_date
-        if date_range["max_date"] <= max_date:
+        if max_date < out_date["max_date"]:
             out_date["max_date"] = max_date
 
     return AvailableDates(
-        min_date=out_date["min_date"].date().strftime("%Y-%m-%d"),
-        max_date=out_date["max_date"].date().strftime("%Y-%m-%d"),
+        min_date=out_date["min_date"].strftime("%Y-%m-%d"),
+        max_date=out_date["max_date"].strftime("%Y-%m-%d"),
     )
 
 
@@ -86,7 +89,7 @@ def get_available_forecasting_roads(zone_name: str) -> dict[str, str]:
     road_ids = zone_dict[zone_name]["strade"]
     road_names = zone_dict[zone_name]["strade_name"]
 
-    index_map = forecasting_data_store["forecast_data"]["index_map"]
+    index_map = get_data()["forecast_data"]["index_map"]
 
     out = {
         str(int(road_id)): road_name
@@ -100,13 +103,14 @@ def get_available_forecasting_roads(zone_name: str) -> dict[str, str]:
 def get_plot_forecast_transactions(
     zone_name: str, date: pd.Timestamp, parkingmeter_id: int | None
 ) -> ForecastTransactionsResult | ErrorStatus:
+    from typing import cast
+
     import matplotlib.pyplot as plt
 
     date_range = get_available_forecasting_dates()
     if "error" in date_range:
-        return date_range
+        return cast(ErrorStatus, date_range)
 
-    data = forecasting_data_store
     zone_dict = get_zone_dict()
 
     start_date = pd.to_datetime(  # type: ignore
@@ -124,8 +128,8 @@ def get_plot_forecast_transactions(
         date=date,
         parkingmeter_id=parkingmeter_id,
         road_id=None,
-        data_type_s="transactions",
-        data=data,
+        data_type="transactions",
+        data=get_data(),
         zone_dict=zone_dict,
     )
 
@@ -140,13 +144,14 @@ def get_plot_forecast_transactions(
 def get_plot_forecast_amount(
     zone_name: str, date: pd.Timestamp, parkingmeter_id: int | None
 ) -> ForecastAmountResult | ErrorStatus:
+    from typing import cast
+
     import matplotlib.pyplot as plt
 
     date_range = get_available_forecasting_dates()
     if "error" in date_range:
-        return date_range
+        return cast(ErrorStatus, date_range)
 
-    data = forecasting_data_store
     zone_dict = get_zone_dict()
 
     start_date = pd.to_datetime(  # type: ignore
@@ -164,8 +169,8 @@ def get_plot_forecast_amount(
         date=date,
         parkingmeter_id=parkingmeter_id,
         road_id=None,
-        data_type_s="amount",
-        data=data,
+        data_type="amount",
+        data=get_data(),
         zone_dict=zone_dict,
     )
 
@@ -181,13 +186,14 @@ def get_plot_forecast_amount(
 def get_plot_forecast_roads(
     zone_name: str, date: pd.Timestamp, road_id: int | None
 ) -> ForecastRoadResult | ErrorStatus:
+    from typing import cast
+
     import matplotlib.pyplot as plt
 
     date_range = get_available_forecasting_dates()
     if "error" in date_range:
-        return date_range
+        return cast(ErrorStatus, date_range)
 
-    data = forecasting_data_store
     zone_dict = get_zone_dict()
 
     start_date = pd.to_datetime(  # type: ignore
@@ -205,8 +211,8 @@ def get_plot_forecast_roads(
         date=date,
         parkingmeter_id=None,
         road_id=road_id,
-        data_type_s="roads",
-        data=data,
+        data_type="roads",
+        data=get_data(),
         zone_dict=zone_dict,
     )
 

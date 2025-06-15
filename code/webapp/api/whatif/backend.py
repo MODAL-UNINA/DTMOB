@@ -1,13 +1,12 @@
+import random
+from dataclasses import dataclass
 from multiprocessing.managers import DictProxy
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import TypeAlias, TypedDict
 
 import matplotlib
 
 matplotlib.use("agg")
-
-import random
-from datetime import datetime
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -21,59 +20,37 @@ from numpy.typing import NDArray
 from sklearn.pipeline import Pipeline
 from torch import nn
 
-from api.general.startup import ZoneDictZoneDataMapping
+from api.general.data import ZoneDictZoneDataMapping
 from api.general.utils.error_status import ErrorStatus
 from api.whatif.data import (
-    WhatIfDataDictMapping,
+    SCENARIO_KIND_MAP,
+    SCENARIOS,
+    WhatIfDataKind,
+    WhatIfFinalDataMapping,
     WhatIfLoadedData,
     WhatIfPCoordinatesMapping,
+    WhatIfRoadMapping,
+    WhatIfScenarioType,
     WhatIfSCoordinatesMapping,
 )
-from api.whatif.scenarios import SCENARIOS
 
 FloatData = np.float32
 FloatArray = NDArray[FloatData]
 
 
-def get_p_coordinates(
-    data: WhatIfLoadedData, _scenario: str
-) -> WhatIfPCoordinatesMapping:
-    return data["p_coordinates"]
+class WhatIfDataDict(TypedDict):
+    cond: torch.Tensor
+    data: torch.Tensor
+    start_date: str
+    end_date: str
 
 
-def get_p_scaler(data: WhatIfLoadedData, _scenario: str) -> Pipeline:
-    return data["p_scaler"]
+ReturnDict: TypeAlias = (
+    "DictProxy[str, tuple[str, FloatArray, WhatIfDataDict] | ErrorStatus]"
+)
 
 
-def get_s_coordinates(
-    data: WhatIfLoadedData, scenario: str
-) -> WhatIfSCoordinatesMapping:
-    if scenario != "2nd":
-        return data["s_coordinates"]
-
-    scenario_data = data["scenarios"]["2nd"]
-    assert "s_coordinates" in scenario_data, (
-        "Expected 's_coordinates' in scenario data for '2nd', "
-        f"but got {list(scenario_data.keys())}"
-    )
-
-    return scenario_data["s_coordinates"]
-
-
-def get_s_scaler(data: WhatIfLoadedData, scenario: str) -> Pipeline:
-    if scenario != "2nd":
-        return data["s_scaler"]
-
-    scenario_data = data["scenarios"]["2nd"]
-    assert "s_scaler" in scenario_data, (
-        "Expected 's_scaler' in scenario data for '2nd', "
-        f"but got {list(scenario_data.keys())}"
-    )
-
-    return scenario_data["s_scaler"]
-
-
-def generation(
+def _generation(
     encoder: nn.Module, generator: nn.Module, mask: torch.Tensor, device: torch.device
 ) -> torch.Tensor:
     with torch.no_grad():
@@ -84,19 +61,212 @@ def generation(
     return output
 
 
-def get_key_for_date(date: str, dict_data: WhatIfDataDictMapping) -> str | None:
-    date_obj = datetime.strptime(date, "%Y-%m-%d")
-    for key in dict_data.keys():
-        start_date, end_date = key.split(" - ")
-        start_obj = datetime.strptime(start_date, "%Y-%m-%d")
-        end_obj = datetime.strptime(end_date, "%Y-%m-%d")
-        if start_obj <= date_obj <= end_obj:
-            return key
-    return None
+def get_week_range(date: pd.Timestamp) -> tuple[pd.Timestamp, pd.Timestamp]:
+    """
+    Get the start and end dates of the week containing the given date.
+    The week starts on Monday and ends on Sunday.
+    """
+    start_date = date - pd.Timedelta(days=date.weekday())
+    end_date = start_date + pd.Timedelta(days=6)
+    return start_date, end_date
 
 
-def load_models(
-    data_path: Path, scenario: str, device: torch.device
+def is_data_kind_valid(kind: WhatIfDataKind, scenario: WhatIfScenarioType) -> bool:
+    return kind in SCENARIO_KIND_MAP[scenario]
+
+
+@dataclass
+class Scenario1Params:
+    final_parkingmeters: WhatIfFinalDataMapping
+    final_parkingslots: WhatIfFinalDataMapping
+    p_coords: WhatIfPCoordinatesMapping
+    s_coords: WhatIfSCoordinatesMapping
+
+
+@dataclass
+class Scenario2Params:
+    final_parkingslots: WhatIfFinalDataMapping
+    s_coords: WhatIfSCoordinatesMapping
+    road_dict: WhatIfRoadMapping
+
+
+@dataclass
+class Scenario3Params:
+    final_parkingmeters: WhatIfFinalDataMapping
+    final_parkingslots: WhatIfFinalDataMapping
+    p_coords: WhatIfPCoordinatesMapping
+    s_coords: WhatIfSCoordinatesMapping
+    weather_data: pd.DataFrame
+
+
+def build_data_dict1(
+    start_date: pd.Timestamp,
+    end_date: pd.Timestamp,
+    scnario_params: Scenario1Params,
+) -> WhatIfDataDict:
+    import numpy as np
+
+    final_parkingmeters = scnario_params.final_parkingmeters
+    final_parkingslots = scnario_params.final_parkingslots
+    p_coords = scnario_params.p_coords
+    s_coords = scnario_params.s_coords
+
+    num_grid_points = 100
+    n_entities = 2
+    timestamp = pd.date_range(
+        start=start_date.date(),
+        end=end_date.date() + pd.Timedelta(days=1),
+        freq="4H",
+        inclusive="left",
+    )
+    matrix = np.zeros((num_grid_points, num_grid_points, n_entities, len(timestamp)))
+    for key in s_coords.keys():
+        (lat_index, lon_index) = s_coords[key]
+        matrix[lat_index, lon_index, 0, :] = final_parkingslots[key]["data"].loc[
+            timestamp
+        ]
+    for key in p_coords.keys():
+        (lat_index, lon_index) = p_coords[key]
+        matrix[lat_index, lon_index, 1, :] = final_parkingmeters[key]["data"].loc[
+            timestamp
+        ]
+    data = torch.tensor(matrix, dtype=torch.float32).permute(3, 2, 0, 1).unsqueeze(0)
+    cond = (data != 0).to(torch.float32)
+
+    return WhatIfDataDict(
+        cond=cond,
+        data=data,
+        start_date=start_date.strftime("%Y-%m-%d"),
+        end_date=end_date.strftime("%Y-%m-%d"),
+    )
+
+
+def build_data_dict2(
+    start_date: pd.Timestamp,
+    end_date: pd.Timestamp,
+    scenario_params: Scenario2Params,
+) -> WhatIfDataDict:
+    import numpy as np
+
+    final_parkingslots = scenario_params.final_parkingslots
+    s_coords = scenario_params.s_coords
+    road_dict = scenario_params.road_dict
+
+    num_grid_points = 100
+    n_entities = 1
+    timestamp = pd.date_range(
+        start=start_date.date(),
+        end=end_date.date() + pd.Timedelta(days=1),
+        freq="4H",
+        inclusive="left",
+    )
+    matrix = np.zeros((num_grid_points, num_grid_points, n_entities, len(timestamp)))
+    roads = np.zeros((num_grid_points, num_grid_points, n_entities, len(timestamp)))
+    for key in s_coords.keys():
+        (lat_index, lon_index) = s_coords[key]
+        matrix[lat_index, lon_index, 0, :] = final_parkingslots[key]["data"].loc[
+            timestamp
+        ]
+    for key in road_dict.keys():
+        for key2 in s_coords.keys():
+            if final_parkingslots[key2]["id_strada"] == key:
+                (lat_index, lon_index) = s_coords[key2]
+                roads[lat_index, lon_index, 0, :] = road_dict[key].loc[timestamp]
+
+    data = torch.tensor(matrix, dtype=torch.float32).permute(3, 2, 0, 1).unsqueeze(0)
+    roads = torch.tensor(roads, dtype=torch.float32).permute(3, 2, 0, 1).unsqueeze(0)
+    cond = (data != 0).to(torch.float32)
+    cond = torch.cat((cond, roads), dim=2)
+    return WhatIfDataDict(
+        cond=cond,
+        data=data,
+        start_date=start_date.strftime("%Y-%m-%d"),
+        end_date=end_date.strftime("%Y-%m-%d"),
+    )
+
+
+def build_data_dict3(
+    start_date: pd.Timestamp,
+    end_date: pd.Timestamp,
+    scenario_params: Scenario3Params,
+) -> WhatIfDataDict:
+    import numpy as np
+
+    final_parkingmeters = scenario_params.final_parkingmeters
+    final_parkingslots = scenario_params.final_parkingslots
+    p_coords = scenario_params.p_coords
+    s_coords = scenario_params.s_coords
+    weather_data = scenario_params.weather_data
+
+    num_grid_points = 100
+    n_entities = 2
+    timestamp = pd.date_range(
+        start=start_date.date(),
+        end=end_date.date() + pd.Timedelta(days=1),
+        freq="4H",
+        inclusive="left",
+    )
+    matrix = np.zeros((num_grid_points, num_grid_points, n_entities, len(timestamp)))
+    meteo = np.zeros((num_grid_points, num_grid_points, 1, len(timestamp)))
+    for key in s_coords.keys():
+        (lat_index, lon_index) = s_coords[key]
+        matrix[lat_index, lon_index, 0, :] = final_parkingslots[key]["data"].loc[
+            timestamp
+        ]
+        meteo[lat_index, lon_index, 0, :] = weather_data.loc[timestamp][
+            "precipitation_mask"
+        ].values  # type: ignore
+    for key in p_coords.keys():
+        (lat_index, lon_index) = p_coords[key]
+        matrix[lat_index, lon_index, 1, :] = final_parkingmeters[key]["data"].loc[
+            timestamp
+        ]
+        meteo[lat_index, lon_index, 0, :] = weather_data.loc[timestamp][
+            "precipitation_mask"
+        ].values  # type: ignore
+    data = torch.tensor(matrix, dtype=torch.float32).permute(3, 2, 0, 1).unsqueeze(0)
+    meteo = torch.tensor(meteo, dtype=torch.float32).permute(3, 2, 0, 1).unsqueeze(0)
+    cond = (data != 0).to(torch.float32)
+    cond = torch.cat((cond, meteo), dim=2)
+
+    return WhatIfDataDict(
+        cond=cond,
+        data=data,
+        start_date=start_date.strftime("%Y-%m-%d"),
+        end_date=end_date.strftime("%Y-%m-%d"),
+    )
+
+
+def build_data_dict(
+    start_date: pd.Timestamp,
+    end_date: pd.Timestamp,
+    scenario: WhatIfScenarioType,
+    scenario_params: Scenario1Params | Scenario2Params | Scenario3Params,
+) -> WhatIfDataDict:
+    """
+    Build the data dictionary based on the scenario type and parameters.
+    """
+    if scenario == "1st":
+        assert isinstance(scenario_params, Scenario1Params), (
+            "Scenario 1 parameters must be of type Scenario1Params"
+        )
+        return build_data_dict1(start_date, end_date, scenario_params)
+    elif scenario == "2nd":
+        assert isinstance(scenario_params, Scenario2Params), (
+            "Scenario 2 parameters must be of type Scenario2Params"
+        )
+        return build_data_dict2(start_date, end_date, scenario_params)
+    elif scenario == "3rd":
+        assert isinstance(scenario_params, Scenario3Params), (
+            "Scenario 3 parameters must be of type Scenario3Params"
+        )
+        return build_data_dict3(start_date, end_date, scenario_params)
+    else:
+        raise ValueError(f"Unknown scenario type: {scenario}")
+
+
+def _load_models(
+    data_path: Path, scenario: WhatIfScenarioType, device: torch.device
 ) -> tuple[Generator, Encoder]:
     if scenario not in SCENARIOS:
         raise ValueError("Invalid scenario")
@@ -147,8 +317,8 @@ def load_models(
 
 
 def get_generation(
-    return_dict: "DictProxy[str, Any]",
-    scenario: str,
+    return_dict: ReturnDict,
+    scenario: WhatIfScenarioType,
     date: pd.Timestamp,
     zone_name: str,
     quantity: int | None,
@@ -156,8 +326,6 @@ def get_generation(
     data: WhatIfLoadedData,
     zone_dict: ZoneDictZoneDataMapping,
     zones: list[str],
-    distances_p: dict[int, dict[int, float]],
-    distances_s: dict[int, dict[int, float]],
 ) -> None:
     import os
     from typing import cast
@@ -175,18 +343,65 @@ def get_generation(
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    date_to_check = date.strftime("%Y-%m-%d")
+    start_date, end_date = get_week_range(date)
 
     scenario_data = data["scenarios"][scenario]
+    final_parkingmeters = scenario_data.get("final_parkingmeters")
+    final_parkingslots = scenario_data["final_parkingslots"]
+    road_dict = scenario_data.get("road_dict")
+    weather_data = scenario_data.get("weather_data")
+    parkingmeters_coordinates = scenario_data.get("p_coordinates")
+    parkingslots_coordinates = scenario_data.get("s_coordinates")
 
-    data_dict = scenario_data["dict_data"]
+    if scenario == "1st":
+        assert final_parkingmeters is not None, (
+            "final_parkingmeters should not be None for the 1st scenario."
+        )
+        assert parkingmeters_coordinates is not None, (
+            "p_coords should not be None for the 1st scenario."
+        )
+        scenario_params = Scenario1Params(
+            final_parkingmeters=final_parkingmeters,
+            final_parkingslots=final_parkingslots,
+            p_coords=parkingmeters_coordinates,
+            s_coords=parkingslots_coordinates,
+        )
+    elif scenario == "2nd":
+        assert road_dict is not None, (
+            "road_dict should not be None for the 2nd scenario."
+        )
+        scenario_params = Scenario2Params(
+            final_parkingslots=final_parkingslots,
+            s_coords=parkingslots_coordinates,
+            road_dict=road_dict,
+        )
+    else:
+        assert final_parkingmeters is not None, (
+            "final_parkingmeters should not be None for the 3rd scenario."
+        )
+        assert parkingmeters_coordinates is not None, (
+            "p_coords should not be None for the 3rd scenario."
+        )
+        assert weather_data is not None, (
+            "weather_data should not be None for the 3rd scenario."
+        )
+        scenario_params = Scenario3Params(
+            final_parkingmeters=final_parkingmeters,
+            final_parkingslots=final_parkingslots,
+            p_coords=parkingmeters_coordinates,
+            s_coords=parkingslots_coordinates,
+            weather_data=weather_data,
+        )
 
-    key_found = get_key_for_date(date_to_check, data_dict)
-    if not key_found:
-        return_dict["generation"] = None, "Invalid date"
-        return
+    range_s = f"{start_date.strftime('%Y-%m-%d')} - {end_date.strftime('%Y-%m-%d')}"
+    data_key = build_data_dict(
+        start_date=start_date,
+        end_date=end_date,
+        scenario=scenario,
+        scenario_params=scenario_params,
+    )
 
-    mask = data_dict[key_found]["cond"].clone()
+    mask = data_key["cond"].clone()
     mask = mask.permute(0, 2, 1, 3, 4)
 
     if quantity is None:
@@ -196,10 +411,13 @@ def get_generation(
     p_keys_to_remove: list[int] = []
     s_keys_to_remove: list[int] = []
 
-    coordinates_parkingmeters = data["p_coordinates"]
-    coordinates_slots = data["s_coordinates"]
+    distances_p = data["distances_p"]
+    distances_s = data["distances_s"]
 
     if scenario == "1st":
+        assert parkingmeters_coordinates is not None, (
+            "p_coords should not be None for the 1st scenario."
+        )
         adjacent_zones = [zone for zone in zones if zone != zone_name]
 
         p_keys_to_remove = zone_dict[zone_name]["parcometro"]
@@ -239,8 +457,8 @@ def get_generation(
                         0,
                         1,
                         :,
-                        coordinates_parkingmeters[p][0],
-                        coordinates_parkingmeters[p][1],
+                        parkingmeters_coordinates[p][0],
+                        parkingmeters_coordinates[p][1],
                     ]
                     == 0
                 )
@@ -248,8 +466,8 @@ def get_generation(
                     0,
                     1,
                     :,
-                    coordinates_parkingmeters[p][0],
-                    coordinates_parkingmeters[p][1],
+                    parkingmeters_coordinates[p][0],
+                    parkingmeters_coordinates[p][1],
                 ] = torch.from_numpy(  # type: ignore
                     np.where(
                         p_mask_zero,
@@ -258,8 +476,8 @@ def get_generation(
                             0,
                             1,
                             :,
-                            coordinates_parkingmeters[p][0],
-                            coordinates_parkingmeters[p][1],
+                            parkingmeters_coordinates[p][0],
+                            parkingmeters_coordinates[p][1],
                         ]
                         + rho_p[p],
                     )
@@ -267,42 +485,53 @@ def get_generation(
 
             for s in s_adjust:
                 s_mask_zero = (
-                    mask[0, 0, :, coordinates_slots[s][0], coordinates_slots[s][1]] == 0
+                    mask[
+                        0,
+                        0,
+                        :,
+                        parkingslots_coordinates[s][0],
+                        parkingslots_coordinates[s][1],
+                    ]
+                    == 0
                 )
-                mask[0, 0, :, coordinates_slots[s][0], coordinates_slots[s][1]] = (
-                    torch.from_numpy(  # type: ignore
-                        np.where(
-                            s_mask_zero,
+                mask[
+                    0,
+                    0,
+                    :,
+                    parkingslots_coordinates[s][0],
+                    parkingslots_coordinates[s][1],
+                ] = torch.from_numpy(  # type: ignore
+                    np.where(
+                        s_mask_zero,
+                        0,
+                        mask[
                             0,
-                            mask[
-                                0,
-                                0,
-                                :,
-                                coordinates_slots[s][0],
-                                coordinates_slots[s][1],
-                            ]
-                            + rho_s[s],
-                        )
-                    ).float()
-                )
+                            0,
+                            :,
+                            parkingslots_coordinates[s][0],
+                            parkingslots_coordinates[s][1],
+                        ]
+                        + rho_s[s],
+                    )
+                ).float()
 
         for key in p_keys_to_remove:
-            lat, lon = coordinates_parkingmeters[key]
+            lat, lon = parkingmeters_coordinates[key]
             mask[0, 1, :, lat, lon] = 0
 
         for key in s_keys_to_remove:
-            lat, lon = coordinates_slots[key]
+            lat, lon = parkingslots_coordinates[key]
             mask[0, 0, :, lat, lon] = 0
     if scenario == "2nd":
         s_keys = zone_dict[zone_name]["stalli"]
         s_keys = [int(key) for key in s_keys]
 
         for key in s_keys:
-            lat, lon = coordinates_slots[key]
+            lat, lon = parkingslots_coordinates[key]
             mask[0, 1, :, lat, lon] += quantity
 
-        lat_indices = [lat for lat, _ in coordinates_slots.values()]
-        lon_indices = [lon for _, lon in coordinates_slots.values()]
+        lat_indices = [lat for lat, _ in parkingslots_coordinates.values()]
+        lon_indices = [lon for _, lon in parkingslots_coordinates.values()]
 
         mask_zero = mask[:, 1, :, lat_indices, lon_indices] == 0
         mask[:, 1, :, lat_indices, lon_indices] = torch.from_numpy(  # type: ignore
@@ -313,48 +542,52 @@ def get_generation(
             )
         ).float()
     if scenario == "3rd":
-        for slot in coordinates_slots.keys():
-            lat, lon = coordinates_slots[slot][0], coordinates_slots[slot][1]
+        assert parkingmeters_coordinates is not None, (
+            "p_coords should not be None for the 3rd scenario."
+        )
+        for slot in parkingslots_coordinates.keys():
+            lat, lon = (
+                parkingslots_coordinates[slot][0],
+                parkingslots_coordinates[slot][1],
+            )
             mask[0, 2, :18, lat, lon] = 1
             mask[0, 2, 18:, lat, lon] = 0
-        for park in coordinates_parkingmeters.keys():
+        for park in parkingmeters_coordinates.keys():
             lat, lon = (
-                coordinates_parkingmeters[park][0],
-                coordinates_parkingmeters[park][1],
+                parkingmeters_coordinates[park][0],
+                parkingmeters_coordinates[park][1],
             )
             mask[0, 2, :18, lat, lon] = 1
             mask[0, 2, 18:, lat, lon] = 0
 
-    generator, encoder = load_models(models_dir, scenario, device)
-    output_t = generation(encoder, generator, mask, device)
+    generator, encoder = _load_models(models_dir, scenario, device)
+    output_t = _generation(encoder, generator, mask, device)
 
     if scenario == "1st":
+        assert parkingmeters_coordinates is not None, (
+            "p_coords should not be None for the 1st scenario."
+        )
         for k in p_keys_to_remove:
-            lat, lon = coordinates_parkingmeters[k]
+            lat, lon = parkingmeters_coordinates[k]
             output_t[0, 1, :, lat, lon] = 0
         for k in s_keys_to_remove:
-            lat, lon = coordinates_slots[k]
+            lat, lon = parkingslots_coordinates[k]
             output_t[0, 0, :, lat, lon] = 0
     output = cast(
         FloatArray,
         output_t.detach().cpu().numpy(),  # type: ignore
     )
 
-    return_dict["generation"] = (key_found, output), None
+    return_dict["generation"] = range_s, output, data_key
 
 
-def get_dfs_parkingmeter(
+def _get_dfs_parkingmeter(
     data_real: FloatArray,
     output: FloatArray,
     coordinates_parkingmeters: WhatIfPCoordinatesMapping,
     scaler_parkingmeters: Pipeline,
 ) -> tuple[
-    FloatArray,
-    FloatArray,
-    pd.DataFrame,
-    pd.DataFrame,
-    pd.DataFrame,
-    pd.DataFrame,
+    FloatArray, FloatArray, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame
 ]:
     from typing import cast
 
@@ -402,7 +635,7 @@ def get_dfs_parkingmeter(
     return p_data, p_gen, p_data_df, p_gen_df, p_data_df_old, p_gen_df_old
 
 
-def get_dfs_parkingslot(
+def _get_dfs_parkingslot(
     data_real: FloatArray,
     output: FloatArray,
     coordinates_slots: WhatIfSCoordinatesMapping,
@@ -473,7 +706,7 @@ class GenerationData(TypedDict):
 
 
 def prepare_generated_data(
-    scenario: str,
+    scenario: WhatIfScenarioType,
     zone_name: str,
     output: FloatArray,
     data_real: FloatArray,
@@ -495,15 +728,20 @@ def prepare_generated_data(
     s_data_df_old = None
     s_gen_df_old = None
 
-    p_coordinates = data["p_coordinates"]
-    s_coordinates = data["s_coordinates"]
-    p_scaler = data["p_scaler"]
-    s_scaler = data["s_scaler"]
+    scenario_data = data["scenarios"][scenario]
+    p_coordinates = scenario_data.get("p_coordinates")
+    s_coordinates = scenario_data["s_coordinates"]
+    p_scaler = scenario_data.get("p_scaler")
+    s_scaler = scenario_data["s_scaler"]
 
     if scenario == "1st":
+        assert p_coordinates is not None, (
+            "p_coordinates should not be None for the 1st scenario."
+        )
+        assert p_scaler is not None, "p_scaler should not be None for the 1st scenario."
         selected_zones = dictionary
         p_data, p_gen, p_data_df, p_gen_df, p_data_df_old, p_gen_df_old = (
-            get_dfs_parkingmeter(
+            _get_dfs_parkingmeter(
                 data_real,
                 output,
                 p_coordinates,
@@ -512,7 +750,7 @@ def prepare_generated_data(
         )
 
         s_data, s_gen, s_data_df, s_gen_df, s_data_df_old, s_gen_df_old = (
-            get_dfs_parkingslot(
+            _get_dfs_parkingslot(
                 data_real,
                 output,
                 s_coordinates,
@@ -523,7 +761,7 @@ def prepare_generated_data(
     elif scenario == "2nd":
         selected_zones = [zone_name] + dictionary
         s_data, s_gen, s_data_df, s_gen_df, s_data_df_old, s_gen_df_old = (
-            get_dfs_parkingslot(
+            _get_dfs_parkingslot(
                 data_real,
                 output,
                 s_coordinates,
@@ -534,7 +772,7 @@ def prepare_generated_data(
     elif scenario == "3rd":
         selected_zones = dictionary
         s_data, s_gen, s_data_df, s_gen_df, s_data_df_old, s_gen_df_old = (
-            get_dfs_parkingslot(
+            _get_dfs_parkingslot(
                 data_real,
                 output,
                 s_coordinates,
@@ -561,51 +799,12 @@ def prepare_generated_data(
     )
 
 
-def get_gif(figs: list[Figure]) -> tuple[list[Figure], str]:
-    import base64
-    import io
-
-    from PIL import Image
-    from PIL.ImageFile import ImageFile
-
-    images: list[ImageFile] = []
-
-    for fig in figs:
-        buffer = io.BytesIO()
-
-        fig.savefig(  # type: ignore
-            buffer, format="png", bbox_inches="tight", dpi=100
-        )
-        buffer.seek(0)
-
-        image = Image.open(buffer)
-
-        images.append(image)
-
-    buffer = io.BytesIO()
-    images[0].save(
-        buffer,
-        save_all=True,
-        append_images=images[1:],
-        format="GIF",
-        duration=500,
-        loop=0,
-        transparency=0,
-        disposal=2,
-    )
-
-    buffer.seek(0)
-
-    img_str = base64.b64encode(buffer.read()).decode("utf-8")
-    return figs, img_str
-
-
 def create_heatmap(
-    scenario: str,
+    scenario: WhatIfScenarioType,
     start_date: str,
     out_data: GenerationData,
     hour_slots: dict[int, str],
-    kind: str,
+    kind: WhatIfDataKind,
     which_data: str,
     selected_day: str,
 ) -> list[Figure] | ErrorStatus:
@@ -635,15 +834,7 @@ def create_heatmap(
     if scenario not in SCENARIOS:
         return ErrorStatus(error="Invalid scenario")
 
-    if scenario == "1st":
-        if kind not in ["parkingmeter", "parkingslot"]:
-            return ErrorStatus(error="Invalid kind")
-    if scenario == "2nd":
-        if kind != "parkingslot":
-            return ErrorStatus(error="Invalid kind")
-    if scenario == "3rd":
-        if kind != "parkingslot":
-            return ErrorStatus(error="Invalid kind")
+    assert is_data_kind_valid(kind, scenario)
 
     start_date_date = pd.Timestamp(start_date)
     selected_day_date = pd.Timestamp(selected_day)
@@ -688,7 +879,7 @@ def create_heatmap(
 
 
 def create_histograms_with_inset(
-    scenario: str, out_data: GenerationData, kind: str
+    scenario: WhatIfScenarioType, out_data: GenerationData, kind: WhatIfDataKind
 ) -> Figure | ErrorStatus:
     """
     Plot a histogram with an inset t-SNE visualization for parking meter data.
@@ -706,15 +897,7 @@ def create_histograms_with_inset(
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes  # type: ignore
     from sklearn.manifold import TSNE
 
-    if scenario == "1st":
-        if kind not in ["parkingmeter", "parkingslot"]:
-            return ErrorStatus(error="Invalid kind")
-    if scenario == "2nd":
-        if kind != "parkingslot":
-            return ErrorStatus(error="Invalid kind")
-    if scenario == "3rd":
-        if kind != "parkingslot":
-            return ErrorStatus(error="Invalid kind")
+    assert is_data_kind_valid(kind, scenario)
 
     data_plot_s = "p_" if kind == "parkingmeter" else "s_"
     real_s = data_plot_s + "data_df_old"
@@ -817,9 +1000,9 @@ def create_histograms_with_inset(
 
 
 def create_radar_chart_map(
-    scenario: str,
+    scenario: WhatIfScenarioType,
     out_data: GenerationData,
-    kind: str,
+    kind: WhatIfDataKind,
     zone_dict: ZoneDictZoneDataMapping,
 ) -> Figure | ErrorStatus:
     """
@@ -827,15 +1010,7 @@ def create_radar_chart_map(
     Each element in real_data and gen_data is a time series of occupancy.
     """
 
-    if scenario == "1st":
-        if kind not in ["parkingmeter", "parkingslot"]:
-            return ErrorStatus(error="Invalid kind")
-    if scenario == "2nd":
-        if kind != "parkingslot":
-            return ErrorStatus(error="Invalid kind")
-    if scenario == "3rd":
-        if kind != "parkingslot":
-            return ErrorStatus(error="Invalid kind")
+    assert is_data_kind_valid(kind, scenario)
 
     data_plot_s = "p_" if kind == "parkingmeter" else "s_"
 
@@ -959,10 +1134,10 @@ def create_radar_chart_map(
 
 
 def create_cumulative_plot(
-    scenario: str,
+    scenario: WhatIfScenarioType,
     start_date: str,
     out_data: GenerationData,
-    kind: str,
+    kind: WhatIfDataKind,
     selected_adjacent_zone: str,
     zone_dict: ZoneDictZoneDataMapping,
 ) -> Figure | ErrorStatus:
@@ -970,15 +1145,7 @@ def create_cumulative_plot(
         start=f"{start_date} 02:00:00", periods=42, freq="4H"
     )
 
-    if scenario == "1st":
-        if kind not in ["parkingmeter", "parkingslot"]:
-            return ErrorStatus(error="Invalid kind")
-    if scenario == "2nd":
-        if kind != "parkingslot":
-            return ErrorStatus(error="Invalid kind")
-    if scenario == "3rd":
-        if kind != "parkingslot":
-            return ErrorStatus(error="Invalid kind")
+    assert is_data_kind_valid(kind, scenario)
 
     data_plot_s = "p_" if kind == "parkingmeter" else "s_"
 

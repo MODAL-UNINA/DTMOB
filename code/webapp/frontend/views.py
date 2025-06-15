@@ -35,6 +35,10 @@ from api.general.views import (
 from api.map.views import do_get_map_data
 from api.stats.views import get_stats_describe_data
 from api.whatif.views import (
+    WhatIfScenarioType,
+    WhatIfDataKind,
+    get_scenario,
+    validate_data_kind,
     get_available_whatif_scenario_dates,
     get_quantity,
     get_whatif_cumulative_plot,
@@ -119,6 +123,13 @@ def get_post_reply(request: HttpRequest) -> JsonResponse:
                     status=202,
                 )
 
+        scenario: WhatIfScenarioType | None = None
+        if "scenario" in args:
+            out = get_scenario(args["scenario"])
+            if isinstance(out, dict):
+                return JsonResponse(out, status=202)
+            scenario = out
+
         quantity: int | None = None
         if "quantity" in args:
             try:
@@ -131,6 +142,13 @@ def get_post_reply(request: HttpRequest) -> JsonResponse:
                     {"error": "Invalid 'quantity' format provided."},
                     status=202,
                 )
+
+        kind: WhatIfDataKind | None = None
+        if "kind" in args:
+            out = validate_data_kind(args["kind"], scenario)
+            if isinstance(out, dict):
+                return JsonResponse(out, status=202)
+            kind = out
 
         if action == "check_server_status":
             ans_time = f"{datetime.now()}"
@@ -325,6 +343,7 @@ def get_post_reply(request: HttpRequest) -> JsonResponse:
                 return JsonResponse(
                     {"error": "Please provide a valid 'selected_date'."}, status=202
                 )
+
             parkingmeter = get_parkingmeter_name(int(args["parkingmeter"]))
             out = get_plot_forecast_transactions(zone_name, date, parkingmeter)
             if "error" in out:
@@ -339,6 +358,7 @@ def get_post_reply(request: HttpRequest) -> JsonResponse:
                 return JsonResponse(
                     {"error": "Please provide a valid 'selected_date'."}, status=202
                 )
+
             parkingmeter = get_parkingmeter_name(int(args["parkingmeter"]))
             out = get_plot_forecast_amount(zone_name, date, parkingmeter)
             if "error" in out:
@@ -353,6 +373,7 @@ def get_post_reply(request: HttpRequest) -> JsonResponse:
                 return JsonResponse(
                     {"error": "Please provide a valid 'selected_date'."}, status=202
                 )
+
             road = get_road_id(args["road"])
             out = get_plot_forecast_roads(zone_name, date, road)
             if "error" in out:
@@ -367,30 +388,32 @@ def get_post_reply(request: HttpRequest) -> JsonResponse:
             with open(logfile, "a") as f:
                 f.write(f"[{ans_time}] {success_out}\n")
             print(f"[{ans_time}] {success_out}")
-            return JsonResponse(get_available_whatif_scenario_dates("1st"))
+            return JsonResponse(get_available_whatif_scenario_dates())
         if action == "get_available_whatif_2ndscenario_dates":
             ans_time = f"{datetime.now()}"
             with open(logfile, "a") as f:
                 f.write(f"[{ans_time}] {success_out}\n")
             print(f"[{ans_time}] {success_out}")
-            return JsonResponse(get_available_whatif_scenario_dates("2nd"))
+            return JsonResponse(get_available_whatif_scenario_dates())
         if action == "get_available_whatif_3rdscenario_dates":
             ans_time = f"{datetime.now()}"
             with open(logfile, "a") as f:
                 f.write(f"[{ans_time}] {success_out}\n")
             print(f"[{ans_time}] {success_out}")
-            return JsonResponse(get_available_whatif_scenario_dates("3rd"))
+            return JsonResponse(get_available_whatif_scenario_dates())
         if action == "run_whatif_generation":
             if date is None:
                 return JsonResponse(
                     {"error": "Please provide a valid 'selected_date'."}, status=202
                 )
-            scenario = args["scenario"]
+            if scenario is None:
+                return JsonResponse("Please provide a valid 'scenario'.")
             if scenario != "3rd" and zone_name == "all_map":
                 return JsonResponse(
-                    {"error": "Please select a specific zone to run the simulation."},
+                    {"error": "Please provide a valid 'zone_name'."},
                     status=202,
                 )
+
             res = run_generation(request, scenario, zone_name, date, quantity)
             ans_time = f"{datetime.now()}"
             with open(logfile, "a") as f:
@@ -402,8 +425,13 @@ def get_post_reply(request: HttpRequest) -> JsonResponse:
                 return JsonResponse(
                     {"error": "Please provide a valid 'selected_date'."}, status=202
                 )
-            scenario = args["scenario"]
-            kind = args["kind"]
+            if scenario is None:
+                return JsonResponse("Please provide a valid 'scenario'.")
+            if kind is None:
+                return JsonResponse(
+                    {"error": "Please provide a valid 'kind'."}, status=202
+                )
+
             selected_weekday = get_date(args.get("selected_weekday"))
             if selected_weekday is None:
                 return JsonResponse(
@@ -431,8 +459,15 @@ def get_post_reply(request: HttpRequest) -> JsonResponse:
                 return JsonResponse(
                     {"error": "Please provide a valid 'selected_date'."}, status=202
                 )
-            scenario = args["scenario"]
-            kind = args["kind"]
+            if scenario is None:
+                return JsonResponse(
+                    "Scenario must be provided for getting distributions."
+                )
+            if kind is None:
+                return JsonResponse(
+                    {"error": "Please provide a valid 'kind'."}, status=202
+                )
+
             out = get_whatif_distributions(
                 request,
                 scenario,
@@ -453,7 +488,15 @@ def get_post_reply(request: HttpRequest) -> JsonResponse:
                 return JsonResponse(
                     {"error": "Please provide a valid 'selected_date'."}, status=202
                 )
-            scenario = args["scenario"]
+            if scenario is None:
+                return JsonResponse(
+                    "Scenario must be provided for getting cumulative plot."
+                )
+            if kind is None:
+                return JsonResponse(
+                    {"error": "Please provide a valid 'kind'."}, status=202
+                )
+
             adjacent_zone_id = args["adjacent_zone_id"]
             if adjacent_zone_id == "":
                 adjacent_zone_id = "0"
@@ -467,7 +510,6 @@ def get_post_reply(request: HttpRequest) -> JsonResponse:
                     {"error": "Invalid 'adjacent_zone_id' provided."},
                     status=202,
                 )
-            kind = args["kind"]
             out = get_whatif_cumulative_plot(
                 request,
                 scenario,

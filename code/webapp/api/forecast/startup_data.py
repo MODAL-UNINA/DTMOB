@@ -8,6 +8,7 @@ from api.general.utils.startup_data import (
 
 STARTUP_DATA = StartupData(
     module_name="Forecast",
+    data_folder="forecast",
     pkl_files_data=PklMapping(
         events="events_all.pkl",
         hourlies__transactions="transactions_number_parkimeters_all.pkl",

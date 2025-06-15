@@ -17,11 +17,7 @@ from api.general.views import (
 )
 
 from .backend import plot1, plot2, plot3, plot4
-from .startup import data_store as distrib_data_store
-
-
-def get_fines_data() -> pd.DataFrame:
-    return distrib_data_store["multe_data"]
+from .startup import get_data
 
 
 def get_transactions_count_plot_inner(
@@ -101,11 +97,9 @@ def get_occupancy_plot_inner(
 
 
 def get_fines_plot_inner(
-    zone_name: str,
-    date: pd.Timestamp | None,
-    hour_range: list[int] | None,
+    zone_name: str, date: pd.Timestamp | None, hour_range: list[int] | None
 ) -> Figure:
-    fines_data = get_fines_data()
+    fines_data = get_data()["multe_data"]
     zone_dict = get_zone_dict()
     return plot4(
         fines_data,
@@ -162,9 +156,7 @@ def get_occupancy_image(
 
 
 def get_fines_image(
-    zone_name: str,
-    date: pd.Timestamp | None,
-    hour_range: list[int] | None,
+    zone_name: str, date: pd.Timestamp | None, hour_range: list[int] | None
 ) -> str:
     fig = get_fines_plot_inner(zone_name, date, hour_range)
 

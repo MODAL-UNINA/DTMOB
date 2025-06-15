@@ -8,8 +8,7 @@ from api.general.utils.image import get_base64_image_from_plotly
 from api.general.views import get_zone_data
 
 from .backend import preprocess_calendar
-from .startup import AgentCalendarDataMapping
-from .startup import data_store as agent_calendar_data_store
+from .startup import get_data
 
 
 class AvailableDates(TypedDict):
@@ -17,19 +16,15 @@ class AvailableDates(TypedDict):
     max_date: str
 
 
-def get_calendar_data() -> AgentCalendarDataMapping:
-    return agent_calendar_data_store["calendar"]
-
-
 def get_date(selected_date: str) -> str:
     if selected_date == "":
-        calendar = get_calendar_data()
+        calendar = get_data()["calendar"]
         selected_date = list(calendar.keys())[0]
     return selected_date
 
 
 def get_available_calendar_dates() -> AvailableDates:
-    calendar = get_calendar_data()
+    calendar = get_data()["calendar"]
     dates = list(calendar.keys())
     return AvailableDates(min_date=min(dates), max_date=max(dates))
 
@@ -38,7 +33,7 @@ def get_calendar_image_inner(
     selected_date: str | pd.Timestamp | None,
 ) -> go.Figure | ErrorStatus:
     zone_dict = get_zone_data()
-    calendar = get_calendar_data()
+    calendar = get_data()["calendar"]
     avail_dates = get_available_calendar_dates()
 
     if selected_date is None:
@@ -65,9 +60,7 @@ def get_calendar_image_inner(
     return preprocess_calendar(calendar, selected_date_, zone_dict)
 
 
-def get_calendar(
-    selected_date: str | pd.Timestamp | None,
-) -> str | ErrorStatus:
+def get_calendar(selected_date: str | pd.Timestamp | None) -> str | ErrorStatus:
     out = get_calendar_image_inner(selected_date)
     if isinstance(out, dict):
         return out

@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.figure import Figure
 
-from api.general.startup import ZoneDictZoneDataMapping
+from api.general.data import ZoneDictZoneDataMapping
 
 
 def plot1(
@@ -60,7 +60,9 @@ def plot1(
             ],
         )
     else:
-        data = data.resample("4h").sum()
+        data = data.resample(  # type: ignore
+            "4h"
+        ).sum()
         all_time_ranges = pd.date_range(  # type: ignore
             start=date, end=selection, freq="4H"
         )
@@ -154,7 +156,9 @@ def plot2(
         data = data.groupby(  # type: ignore
             data["datetime"]  # type: ignore
         ).agg({"total": "sum"})
-        data = data.resample("4H").sum()
+        data = data.resample(  # type: ignore
+            "4H"
+        ).sum()
         all_time_ranges = pd.date_range(  # type: ignore
             start=date, end=selection, freq="4H"
         )

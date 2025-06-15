@@ -34,3 +34,42 @@ def get_base64_image_from_plotly(fig: go.Figure) -> str:
     img_str = base64.b64encode(buffer.read()).decode("utf-8")
 
     return img_str
+
+
+def get_base64_gif(figs: list[Figure]) -> tuple[list[Figure], str]:
+    import base64
+    import io
+
+    from PIL import Image
+    from PIL.ImageFile import ImageFile
+
+    images: list[ImageFile] = []
+
+    for fig in figs:
+        buffer = io.BytesIO()
+
+        fig.savefig(  # type: ignore
+            buffer, format="png", bbox_inches="tight", dpi=100
+        )
+        buffer.seek(0)
+
+        image = Image.open(buffer)
+
+        images.append(image)
+
+    buffer = io.BytesIO()
+    images[0].save(
+        buffer,
+        save_all=True,
+        append_images=images[1:],
+        format="GIF",
+        duration=500,
+        loop=0,
+        transparency=0,
+        disposal=2,
+    )
+
+    buffer.seek(0)
+
+    img_str = base64.b64encode(buffer.read()).decode("utf-8")
+    return figs, img_str

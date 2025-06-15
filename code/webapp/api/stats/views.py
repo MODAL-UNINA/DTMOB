@@ -19,7 +19,7 @@ from api.general.views import (
 )
 
 from .backend import AbusivismData, ColorMap, StatsData, get_stats_info
-from .startup import stats_data_store
+from .startup import get_data
 
 
 class StatsDescriptionInner(TypedDict):
@@ -47,12 +47,13 @@ def get_stats_describe_plot_inner(
     transactions_parkingmeters = get_transactions_parkingmeters()
     zone_data = get_zone_data()
     mapping_dict = get_zone_dict()
-    poi_data = stats_data_store["poi_data"]
-    events_data = stats_data_store["events_data"]
+    stats_data = get_data()
+    poi_data = stats_data["poi_data"]
+    events_data = stats_data["events_data"]
     all_parkingslots = get_all_sensors()
     status_parkingslots = get_status_sensors()
-    fines_data = stats_data_store["multe_data"]
-    zone_params = stats_data_store["zone_params"]
+    fines_data = stats_data["multe_data"]
+    zone_params = stats_data["zone_params"]
 
     results, results_abusivism, correlations, label_map, color_map = get_stats_info(
         zone_data=zone_data,

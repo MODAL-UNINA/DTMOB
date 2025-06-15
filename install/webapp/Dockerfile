@@ -54,5 +54,3 @@ RUN conda --version
 RUN mamba --version
 RUN python --version
 RUN pip --version
-
-EXPOSE 8080

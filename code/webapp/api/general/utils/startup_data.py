@@ -23,6 +23,7 @@ class StartupData(TypedDict):
     """
 
     module_name: str
+    data_folder: NotRequired[str]
     pkl_files_data: PklMapping
     json_files_data: JsonMapping
     csv_files_data: NotRequired[CSVMapping]

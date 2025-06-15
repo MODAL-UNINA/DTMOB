@@ -16,7 +16,6 @@ dependencies:
   - pip=24.3
   - plotly=5.24
   - pymannkendall=1.4
-  - python-dotenv=1.0
   - python-kaleido=0.2
   - pytorch=2.5
   - pytorch-cuda=12.1

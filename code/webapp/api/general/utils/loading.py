@@ -47,10 +47,10 @@ def load_files(
     return out_data
 
 
-def load_startup_files(
-    data_path: Path,
-    startup_data: StartupData,
-) -> dict[str, Any]:
+def load_startup_files(data_path: Path, startup_data: StartupData) -> dict[str, Any]:
+    module_path = startup_data.get("data_folder")
+    if module_path is not None:
+        data_path = data_path / module_path
     return load_files(
         data_path,
         startup_data["module_name"],

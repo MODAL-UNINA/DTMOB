@@ -1,10 +1,6 @@
 from typing import TypedDict
 
-from api.general.views import (
-    get_area_name_mapping,
-    get_street_name_map,
-    get_zone_data,
-)
+from api.general.views import get_area_name_mapping, get_street_name_map, get_zone_data
 
 from .backend import (
     ParkingmeterPosition,
@@ -13,7 +9,7 @@ from .backend import (
     ZoneBoundary,
     get_map_data,
 )
-from .startup import data_store as map_data_store
+from .startup import get_data
 
 
 class OutRoadData(TypedDict):
@@ -37,9 +33,10 @@ class OutMapData(TypedDict):
 
 def do_get_map_data() -> OutMapData:
     meshgrid = get_zone_data()
-    parkingmeters_selection = map_data_store["parkingmeter_positions"]
-    slots_selection = map_data_store["sensors"]
-    roads_gdf = map_data_store["roads_gdf"]
+    map_data = get_data()
+    parkingmeters_selection = map_data["parkingmeter_positions"]
+    slots_selection = map_data["sensors"]
+    roads_gdf = map_data["roads_gdf"]
 
     out = get_map_data(meshgrid, parkingmeters_selection, slots_selection, roads_gdf)
 

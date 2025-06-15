@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -192,7 +191,7 @@ def preprocess_data(data: OriginalForecastData) -> PreprocessedForecastData:
     )
 
 
-def postprocess(data: dict[str, Any], data_path: Path) -> ForecastData:
+def preprocess(all_data: dict[str, Any]) -> ForecastData:
     """
     Postprocess the loaded data.
     This function is called after loading the data from files.
@@ -201,6 +200,9 @@ def postprocess(data: dict[str, Any], data_path: Path) -> ForecastData:
 
     import pandas as pd
     from sklearn.preprocessing import MinMaxScaler
+
+    data_path = all_data["data_path"]
+    data = all_data["data"]
 
     weather = WeatherData(
         prec=cast(pd.DataFrame, data.pop("weather__prec")),

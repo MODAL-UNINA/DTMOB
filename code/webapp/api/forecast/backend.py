@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Literal, NotRequired, TypedDict, cast
+from typing import Any, Literal, NotRequired, TypedDict, cast, get_args
 
 import matplotlib
 
@@ -23,14 +23,17 @@ from api.forecast.data import (
     ForecastArgs,
     ForecastData,
     ForecastDataType,
-    IndexMapData,
+    ForecastIndexMapData,
     ModelArgs,
 )
-from api.general.startup import ZoneDictZoneDataMapping
+from api.general.data import ZoneDictZoneDataMapping
 from api.general.utils.error_status import ErrorStatus
 
 ForecastDataMapping = dict[str, FloatArray]
 ForecastPlot1DataType = Literal["transactions", "amount"]
+FORECAST_PLOT1_DATA_TYPES = cast(
+    list[ForecastPlot1DataType], get_args(ForecastPlot1DataType)
+)
 
 
 class AvailableDatetimes(TypedDict):
@@ -306,13 +309,15 @@ def plot1(
     pred_series: ForecastDataMapping,
     actual_series: ForecastDataMapping,
     zone_dict: ZoneDictZoneDataMapping,
-    index_map: IndexMapData,
+    index_map: ForecastIndexMapData,
     date: str,
     zone_name: str | None = None,
     parkingmeter_id: int | None = None,
     data_type: ForecastPlot1DataType = "transactions",
 ) -> Figure:
-    import pandas as pd
+    assert data_type in FORECAST_PLOT1_DATA_TYPES, (
+        f"Invalid data_type: {data_type}. Expected one of {FORECAST_PLOT1_DATA_TYPES}."
+    )
 
     if data_type == "amount":
         actual_series = {k: v / 100 for k, v in actual_series.items()}
@@ -433,7 +438,7 @@ def plot2(
     pred_series: ForecastDataMapping,
     actual_series: ForecastDataMapping,
     zone_dict: ZoneDictZoneDataMapping,
-    index_map: IndexMapData,
+    index_map: ForecastIndexMapData,
     date: str,
     zone_name: str | None = None,
     road_id: int | None = None,
@@ -539,15 +544,10 @@ def do_get_prediction(
     date: pd.Timestamp,
     parkingmeter_id: int | None,
     road_id: int | None,
-    data_type_s: str,
+    data_type: ForecastDataType,
     data: ForecastData,
     zone_dict: ZoneDictZoneDataMapping,
 ) -> Figure | ErrorStatus:
-    if data_type_s not in ["transactions", "amount", "roads"]:
-        return ErrorStatus(error=f"data_type {data_type_s} not supported")
-
-    data_type = cast(ForecastDataType, data_type_s)
-
     if parkingmeter_id is not None:
         if parkingmeter_id not in zone_dict[zone_name]["parcometro"]:
             return ErrorStatus(
@@ -573,7 +573,7 @@ def do_get_prediction(
     )
 
     if "error" in date_range:
-        return date_range
+        return cast(ErrorStatus, date_range)
 
     min_date = date_range["min_date"]
     max_date = date_range["max_date"]

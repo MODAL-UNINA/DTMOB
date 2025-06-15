@@ -3,30 +3,28 @@ from typing import Literal
 
 import pandas as pd
 
-from .startup import (
+from .data import (
     CityMapData,
     HourSlotsData,
     MacroAreaMapData,
     ZoneDataMapping,
     ZoneDictZoneDataMapping,
 )
-from .startup import (
-    data_store as general_data_store,
-)
+from .startup import get_data
 
 LegalityStatus = Literal["occupied_regularly", "occupied_abusively"]
 
 
 def get_city_mapping() -> CityMapData:
-    return general_data_store["citymap"]
+    return get_data()["citymap"]
 
 
 def get_zone_data() -> ZoneDataMapping:
-    return general_data_store["zone"]
+    return get_data()["zone"]
 
 
 def get_zone_dict() -> ZoneDictZoneDataMapping:
-    return general_data_store["zone_dict"]
+    return get_data()["zone_dict"]
 
 
 def get_zone_name(area_id: int) -> str:
@@ -55,14 +53,14 @@ def get_area_id_label_mapping() -> dict[int, str]:
 
 
 def get_available_dates() -> dict[str, datetime.date]:
-    available_dates = general_data_store["available_dates"]
+    available_dates = get_data()["available_dates"]
     return dict(
         min_date=available_dates["min_date"], max_date=available_dates["max_date"]
     )
 
 
 def get_hour_slots() -> dict[int, HourSlotsData]:
-    return general_data_store["hour_slots"]
+    return get_data()["hour_slots"]
 
 
 def get_area_street_map() -> dict[int, list[int]]:
@@ -74,7 +72,7 @@ def get_street_name_map() -> dict[int, str]:
 
 
 def get_macroarea_map() -> MacroAreaMapData:
-    return general_data_store["macroarea_map"]
+    return get_data()["macroarea_map"]
 
 
 def get_macroarea_hourslot_map() -> dict[str, dict[tuple[int, int], bool]]:
@@ -126,19 +124,19 @@ def get_parkingslot_name(parkingslot: int) -> int | None:
 
 
 def get_transactions_parkingmeters() -> pd.DataFrame:
-    return general_data_store["transactions_parkingmeters"]
+    return get_data()["transactions_parkingmeters"]
 
 
 def get_amount_parkingmeters() -> pd.DataFrame:
-    return general_data_store["amount_parkingmeters"]
+    return get_data()["amount_parkingmeters"]
 
 
 def get_all_sensors() -> pd.DataFrame:
-    return general_data_store["all_sensors"]
+    return get_data()["all_sensors"]
 
 
 def get_status_sensors() -> pd.DataFrame:
-    return general_data_store["status_sensors"]
+    return get_data()["status_sensors"]
 
 
 def get_road_id(road_id: int) -> int | None:

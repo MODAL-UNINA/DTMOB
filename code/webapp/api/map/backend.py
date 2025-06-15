@@ -3,7 +3,7 @@ from typing import TypedDict
 import geopandas as gpd
 import pandas as pd
 
-from api.general.startup import ZoneDataMapping
+from api.general.data import ZoneDataMapping
 
 
 class ZoneBoundary(TypedDict):

@@ -11,8 +11,8 @@ import pymannkendall as mk  # type: ignore
 from matplotlib.figure import Figure
 from numpy.typing import NDArray
 
-from api.general.startup import ZoneDataMapping, ZoneDictZoneDataMapping
-from api.stats.startup import ZoneParamsMapping
+from api.general.data import ZoneDataMapping, ZoneDictZoneDataMapping
+from api.stats.data import ZoneParamsMapping
 
 
 class ParkingMeterAnalysis(TypedDict):
@@ -584,7 +584,7 @@ def get_stats_info(
                 sen_slope=sen,
             )
 
-    new_df = zone_status.merge(
+    new_df = zone_status.merge(  # type: ignore
         fines_data_grouped, on=["zone_name", "datetime", "shift"], how="outer"
     )
     new_df.fillna(0, inplace=True)  # type: ignore

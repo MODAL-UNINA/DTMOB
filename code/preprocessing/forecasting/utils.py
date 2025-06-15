@@ -9,16 +9,12 @@ from statsmodels.tsa.seasonal import STL  # type: ignore
 from torch.utils.data import Dataset
 
 FloatArray = NDArray[np.float64]
+ObjectArray = NDArray[np.object_]
 
 
 def create_sequences_multivariate(
     series: FloatArray, indices: "pd.Index[Any]", seq_length: int, horizon: int
-) -> tuple[
-    torch.Tensor,
-    NDArray[np.object_],
-    torch.Tensor,
-    NDArray[np.object_],
-]:
+) -> tuple[torch.Tensor, ObjectArray, torch.Tensor, ObjectArray]:
     """
     Creates sequences for multivariate time series forecasting.
 

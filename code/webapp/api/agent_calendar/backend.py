@@ -5,8 +5,8 @@ import plotly.graph_objects as go  # type: ignore
 from numpy import object_
 from numpy.typing import NDArray
 
-from api.agent_calendar.startup import AgentCalendarDataMapping
-from api.general.startup import ZoneDataMapping
+from api.agent_calendar.data import AgentCalendarDataMapping
+from api.general.data import ZoneDataMapping
 
 
 def preprocess_calendar(

@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Literal, NotRequired, TypedDict
+from typing import Literal, NotRequired, TypedDict, cast, get_args
 
 import numpy as np
 import pandas as pd
@@ -10,6 +10,7 @@ FloatArray = NDArray[np.float64]
 BoolArray = NDArray[np.bool_]
 
 ForecastDataType = Literal["transactions", "amount", "roads"]
+FORECAST_DATA_TYPES = cast(list[ForecastDataType], get_args(ForecastDataType))
 
 
 class ModelArgs(TypedDict):
@@ -50,7 +51,7 @@ class WeatherData(TypedDict):
     humidity: pd.DataFrame
 
 
-class IndexMapData(TypedDict):
+class ForecastIndexMapData(TypedDict):
     parkimeters: dict[str, int]
     roads: dict[str, int]
 
@@ -64,7 +65,7 @@ class OriginalForecastData(TypedDict):
     data_scaler: dict[ForecastDataType, MinMaxScaler]
     exog_scaler: dict[ForecastDataType, MinMaxScaler]
     model_args: dict[ForecastDataType, ForecastArgs]
-    index_map: IndexMapData
+    index_map: ForecastIndexMapData
 
 
 class PreprocessedForecastData(TypedDict):
