@@ -1,22 +1,22 @@
+import random
+from multiprocessing.managers import DictProxy
 from pathlib import Path
-from typing import Any, Literal, NotRequired, TypedDict, cast, get_args
+from typing import Literal, NotRequired, TypedDict, cast, get_args
 
 import matplotlib
 
 matplotlib.use("agg")
 
-import random
-from multiprocessing.managers import DictProxy
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
+from common.forecasting.models import ModelArgs as TorchModelArgs
+from common.forecasting.models import Modelcomplete
 from matplotlib.figure import Figure
 from sklearn.preprocessing import MinMaxScaler
 from statsmodels.tsa.seasonal import STL  # type: ignore
 
-from common.forecasting.models import Modelcomplete, ModelArgs as TorchModelArgs
 from api.forecast.data import (
     BoolArray,
     FloatArray,
@@ -229,7 +229,7 @@ def get_date_range(
 
 
 def predict(
-    return_dict: "DictProxy[str, Any]",
+    return_dict: "DictProxy[str, FloatArray]",
     model_args: ModelArgs,
     model_path: Path,
     data: ForecastDecomposedData,
@@ -287,8 +287,9 @@ def predict(
             model_path, map_location=device, weights_only=True
         )
     )
-
-    prediction, _, _, _ = model(seasonal, residual, trend, exog, poi_tensor, mask)
+    model.eval()
+    with torch.no_grad():
+        prediction, _, _, _ = model(seasonal, residual, trend, exog, poi_tensor, mask)
     prediction = prediction.cpu().detach().numpy()
 
     prediction = data_scaler.inverse_transform(  # type: ignore
@@ -603,10 +604,14 @@ def do_get_prediction(
     import torch.multiprocessing as mp
 
     manager = mp.Manager()
-    return_dict = manager.dict()
+    return_dict: "DictProxy[str, FloatArray]" = manager.dict()
 
+    process_name = "__".join(
+        ["predict", data_type, date.strftime("%Y-%m-%d"), zone_name]
+    )
     p = mp.Process(
         target=predict,
+        name=process_name,
         args=(
             return_dict,
             model_args,
@@ -617,6 +622,7 @@ def do_get_prediction(
             data_scaler,
             data_type,
         ),
+        daemon=True,
     )
     p.start()
     p.join()
