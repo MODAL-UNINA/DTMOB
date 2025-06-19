@@ -31,7 +31,7 @@ All the code can be executed through [Docker Engine](https://docs.docker.com/eng
 For the execution of the scripts with a **CUDA-capable GPU**, we require the GPU and NVidia drivers compatible with **CUDA 12.1 or newer** and the installation of [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/index.html). Furthermore, given the large size of the models for the training, a GPU with at least 24 GB of VRAM is required for this example data. For the complete data and the model of the case study we need at least 48 GB of VRAM.
 
 ### 1. Data download
-The available data for the execution of all the scripts is provided at the following [link](https://drive.google.com/file/d/1NM-1uefJ4qnCHVwK-nNSkGSOA63hU5v8/view?usp=drive_link) (approximate size: 15 GB uncompressed).
+The available data for the execution of all the scripts is provided at the following [link](https://drive.google.com/file/d/13JeMKgjJ-B-nm7pmzQIX7jiOQi71Lcar/view?usp=drive_link) (approximate size: 5 GB uncompressed).
 
 Download the zip file in the `data/` folder and unzip it with the following command from the terminal:
 
@@ -41,14 +41,8 @@ unzip Data_DTMOB.zip
 
 this will create two folders inside data: `preprocessing` and `webapp`.
 
-### 1. Build of the Docker Image
-Create a file named `.env` at the main folder with the following content:
-
-```
-PORT=8080
-```
-
-Then run the following in a terminal at the same folder:
+### 2. Build of the Docker Images
+Run the following in a terminal at the main folder:
 
 ```sh
 docker compose build
@@ -70,25 +64,41 @@ this will start a new shell session in the generated container
 
 #### 1. Forecasting
 
-From the shell, run the following for the forecasting:
+Three different configurations for the forecasting are available in the folder `code/preprocessing/configs/forecasting`:
+- Transactions (transactions.yml), for the parking meter transactions forecasting
+- Revenue (amount.yml), for the parking meter revenue forecasting
+- Road occupancy (roads.yml), for the road occupancy forecasting
+
+To run one of these configurations, from the shell, run the following for the forecasting:
 
 ```sh
-bash run_forecasting.sh
+bash run_forecasting.sh <config_name>
 ```
+
+where `<config_name>` can be `transactions`, `amount`, or `roads` depending on the configuration you want to run.
 
 The results are saved in the `results/preprocessing/forecasting` folder relative to the project folder.
 
 #### 2. Generation
-For the generation, run the following:
+Three different configurations for the generation are available in the folder `code/preprocessing/configs/generation`:
+- First scenario (1stscenario.yml), for the first scenario generation
+- Second scenario (2ndscenario.yml), for the second scenario generation
+- Third scenario (3rdscenario.yml), for the third scenario generation
+
+To run one of these configurations, from the shell, run the following for the generation:
 
 ```sh
-bash run_generation.sh
+bash run_generation.sh <config_name>
 ```
+
+where `<config_name>` can be `1stscenario`, `2ndscenario`, or `3rdscenario` depending on the configuration you want to run.
 
 The results are saved in the `results/preprocessing/generation` folder.
 
 #### 3. Scheduling
-For the agent scheduling for 12th January 2025, run the following:
+For the agent scheduling the only configurable option is the date in the format `YYYY-MM-DD`.
+
+For example, for 12th January 2025, run the following:
 
 ```sh
 bash run_scheduling.sh 2025-01-12
