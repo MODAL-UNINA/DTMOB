@@ -1,4 +1,5 @@
 import time
+import warnings
 from typing import Any, Literal
 
 import geopandas as gpd
@@ -43,13 +44,17 @@ def generate_poi(
     print("Extracting and processing Points of Interest (POI) data...")
 
     # POI's extraction
-    poi_data = cast(
-        gpd.GeoDataFrame,
-        ox.geometries_from_bbox(  # type: ignore
-            north, south, east, west, tags={"amenity": True}
-        ),
-    )
-    poi_data.reset_index(drop=True, inplace=True)
+    with warnings.catch_warnings():
+        # Suppress bbox v2.0 update from OSMnx
+        warnings.filterwarnings("ignore", category=FutureWarning)
+
+        poi_data = cast(
+            gpd.GeoDataFrame,
+            ox.features_from_bbox(  # type: ignore
+                bbox=(north, south, east, west), tags={"amenity": True}
+            ),
+        )
+        poi_data.reset_index(drop=True, inplace=True)
 
     # List of amenities to include
     amenities_good = [

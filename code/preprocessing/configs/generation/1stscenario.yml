@@ -1,0 +1,16 @@
+scenario: 1st
+selected_zone: zone_2
+cond_dim: 2
+input_dim: 2
+horizon: 42 # 6 * 7
+batch_size: 5
+lr_rate: 1e-4
+# num_epochs: 1000  # commented out for testing purposes
+num_epochs: 5
+train_percentage: 0.8
+grid_size: 100
+padding: 1
+kernel_size: 3
+hidden_dim: 32
+latent_dim: 100
+proximity: true

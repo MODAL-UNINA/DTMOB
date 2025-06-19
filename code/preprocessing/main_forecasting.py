@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import random
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -32,99 +33,36 @@ from forecasting.utils import (
 from sklearn.manifold import MDS
 from torch.utils.data import DataLoader
 
+
+@dataclass
+class Arguments:
+    data_type: DataType
+    target_channel: int
+    input_length: int
+    horizon: int
+    batch_size: int
+    use_gps: bool
+    num_nodes: int
+    node_dim: int
+    input_dim: int
+    embed_dim: int
+    num_layer: int
+    temp_dim_tid: int
+    temp_dim_diw: int
+    time_of_day_size: int
+    day_of_week_size: int
+    if_T_i_D: bool
+    if_D_i_W: bool
+    use_poi: bool
+    if_node: bool
+    exogenous_dim: int
+    num_poi_types: int
+    num_epochs: int
+    train_percentage: float
+
+
 parser = argparse.ArgumentParser(allow_abbrev=False)
-
-# ARGS FOR TRANSACTIONS
-parser.add_argument("--data_type", type=str, default="transactions")
-parser.add_argument("--target_channel", type=int, default=0)
-# the final model has input length 24 * 7 * 4, but for the publicly reduced data there are not enough data
-# for training
-parser.add_argument("--input_length", type=int, default=24 * 7)
-parser.add_argument("--horizon", type=int, default=24 * 7)
-parser.add_argument("--batch_size", type=int, default=128)
-parser.add_argument("--use_gps", type=bool, default=True)
-parser.add_argument("--num_nodes", type=int, default=96)
-parser.add_argument("--node_dim", type=int, default=16)
-parser.add_argument("--input_dim", type=int, default=1)
-parser.add_argument("--embed_dim", type=int, default=512)
-parser.add_argument("--num_layer", type=int, default=1)
-parser.add_argument("--temp_dim_tid", type=int, default=8)
-parser.add_argument("--temp_dim_diw", type=int, default=8)
-parser.add_argument("--time_of_day_size", type=int, default=24)
-parser.add_argument("--day_of_week_size", type=int, default=7)
-parser.add_argument("--if_T_i_D", type=bool, default=True)
-parser.add_argument("--if_D_i_W", type=bool, default=True)
-parser.add_argument("--use_poi", type=bool, default=True)
-parser.add_argument("--if_node", type=bool, default=True)
-parser.add_argument("--exogenous_dim", type=int, default=13)
-parser.add_argument("--num_poi_types", type=int, default=7)
-# the final model was trained with 1000 epochs, but for testing purposes we use 5 epochs
-parser.add_argument("--num_epochs", type=int, default=5)
-# the final model was trained with train percentage 0.9, but for the publicly reduced data there are not enough data
-# for training
-parser.add_argument("--train_percentage", type=float, default=0.8)
-
-# # ARGS FOR AMOUNT
-# parser.add_argument("--data_type", type=str, default="amount")
-# parser.add_argument("--target_channel", type=int, default=0)
-# # the final model has input length 24 * 7 * 4, but for the publicly reduced data there are not enough data
-# # for training
-# parser.add_argument("--input_length", type=int, default=24 * 7)
-# parser.add_argument("--horizon", type=int, default=24 * 7)
-# parser.add_argument("--batch_size", type=int, default=128)
-# parser.add_argument("--use_gps", type=bool, default=True)
-# parser.add_argument("--num_nodes", type=int, default=96)
-# parser.add_argument("--node_dim", type=int, default=16)
-# parser.add_argument("--input_dim", type=int, default=1)
-# parser.add_argument("--embed_dim", type=int, default=512)
-# parser.add_argument("--num_layer", type=int, default=1)
-# parser.add_argument("--temp_dim_tid", type=int, default=8)
-# parser.add_argument("--temp_dim_diw", type=int, default=8)
-# parser.add_argument("--time_of_day_size", type=int, default=24)
-# parser.add_argument("--day_of_week_size", type=int, default=7)
-# parser.add_argument("--if_T_i_D", type=bool, default=True)
-# parser.add_argument("--if_D_i_W", type=bool, default=True)
-# parser.add_argument("--use_poi", type=bool, default=True)
-# parser.add_argument("--if_node", type=bool, default=True)
-# parser.add_argument("--exogenous_dim", type=int, default=13)
-# parser.add_argument("--num_poi_types", type=int, default=7)
-# # the final model was trained with 1000 epochs, but for testing purposes we use 5 epochs
-# parser.add_argument("--num_epochs", type=int, default=5)
-# # the final model was trained with train percentage 0.9, but for the publicly reduced data there are not enough data
-# # for training
-# parser.add_argument("--train_percentage", type=float, default=0.8)
-
-
-# # ARGS FOR ROADS
-# parser.add_argument("--data_type", type=str, default="roads")
-# parser.add_argument("--target_channel", type=int, default=0)
-# # the final model has input length 24 * 7 * 3, but for the publicly reduced data there are not enough data
-# # for training
-# parser.add_argument("--input_length", type=int, default=24 * 7)
-# parser.add_argument("--horizon", type=int, default=24 * 7)
-# parser.add_argument("--batch_size", type=int, default=64)
-# parser.add_argument("--use_gps", type=bool, default=False)
-# parser.add_argument("--num_nodes", type=int, default=56)
-# parser.add_argument("--node_dim", type=int, default=16)
-# parser.add_argument("--input_dim", type=int, default=1)
-# parser.add_argument("--embed_dim", type=int, default=256)
-# parser.add_argument("--num_layer", type=int, default=1)
-# parser.add_argument("--temp_dim_tid", type=int, default=8)
-# parser.add_argument("--temp_dim_diw", type=int, default=8)
-# parser.add_argument("--time_of_day_size", type=int, default=24)
-# parser.add_argument("--day_of_week_size", type=int, default=7)
-# parser.add_argument("--if_T_i_D", type=bool, default=True)
-# parser.add_argument("--if_D_i_W", type=bool, default=True)
-# parser.add_argument("--use_poi", type=bool, default=True)
-# parser.add_argument("--if_node", type=bool, default=True)
-# parser.add_argument("--exogenous_dim", type=int, default=13)
-# parser.add_argument("--num_poi_types", type=int, default=7)
-# # the final model was trained with 1000 epochs, but for testing purposes we use 5 epochs
-# parser.add_argument("--num_epochs", type=int, default=5)
-# # the final model was trained with train percentage 0.9, but for the publicly reduced data there are not enough data
-# # for training
-# parser.add_argument("--train_percentage", type=float, default=0.8)
-
+parser.add_argument("--config", type=str)
 
 seed = 42
 random.seed(seed)
@@ -162,6 +100,7 @@ def train_model(
             n_components=model_args["node_dim"],
             dissimilarity="precomputed",
             random_state=42,
+            normalized_stress=False,
         )
         gps_embeddings = mds.fit_transform(  # type: ignore
             dist_matrix.numpy()  # type: ignore
@@ -328,9 +267,16 @@ def predict(
 
 
 if __name__ == "__main__":
-    from typing import cast, get_args
+    from typing import cast
+
+    import yaml
 
     args, _ = parser.parse_known_args()
+
+    with open(Path("configs") / "forecasting" / (args.config + ".yml"), "r") as f:
+        config = yaml.safe_load(f)
+
+    args = Arguments(**config)
 
     data_dir = Path(os.getenv("DATA_DIR", "../../data/preprocessing"))
     if not data_dir.exists():
@@ -340,25 +286,20 @@ if __name__ == "__main__":
     if not results_dir.exists():
         raise FileNotFoundError(f"Results directory {results_dir} does not exist.")
 
-    data_type_ = str(args.data_type)
-    if data_type_ not in get_args(DataType):
-        raise ValueError(
-            "data_type must be one of 'transactions', 'amount', or 'roads'."
-        )
-    data_type = cast(DataType, data_type_)
-
     parkingmeters_registry: list[dict[str, Any]] = []
     hourly_transactions = pd.DataFrame()
     roads_data = pd.DataFrame()
     # Generate data
-    if data_type in ["transactions", "amount"]:
+    if args.data_type in ["transactions", "amount"]:
         transaction_data = pd.read_csv(  # type: ignore
             data_dir / "transaction_data.csv"
         )
         with open(data_dir / "anagraficaParcometro.json", "r") as f:
             parkingmeters_registry = json.load(f)
 
-        hourly_transactions = generate_hourly_transactions(transaction_data, data_type)
+        hourly_transactions = generate_hourly_transactions(
+            transaction_data, args.data_type
+        )
 
         hourly_transactions = hourly_transactions[
             [reg["id"] for reg in parkingmeters_registry]
@@ -499,9 +440,9 @@ if __name__ == "__main__":
     exog_data = pd.concat([weather_data, events_data, is_holiday, our_holidays], axis=1)
 
     # Generate POI data
-    if data_type in ["transactions", "amount"]:
+    if args.data_type in ["transactions", "amount"]:
         poi_dist, poi_categories = generate_poi(
-            parkingmeters_registry, south, west, north, east, data_type
+            parkingmeters_registry, south, west, north, east, args.data_type
         )
 
     else:
@@ -517,7 +458,7 @@ if __name__ == "__main__":
             west=west,
             north=north,
             east=east,
-            data_type=data_type,
+            data_type=args.data_type,
         )
 
     poi_categories = np.expand_dims(
@@ -568,7 +509,7 @@ if __name__ == "__main__":
         dist_matrix = haversine_matrix(gps_coordinates)
         dist_matrix = normalize_distance_matrix(dist_matrix)
 
-    if data_type in ["transactions", "amount"]:
+    if args.data_type in ["transactions", "amount"]:
         (
             data_scaler,
             train_data_with_features,

@@ -83,9 +83,7 @@ class MV_Forecasting(nn.Module):
                     self.node_emb = nn.Parameter(
                         torch.empty(self.num_nodes, self.node_dim)
                     )
-                    self.node_emb.data = torch.tensor(
-                        self.gps_embedding, dtype=torch.float32
-                    )
+                    self.node_emb.data = self.gps_embedding.to(torch.float32)
                 else:
                     # If no GPS embedding is provided, initialize node embeddings randomly
                     self.node_emb = nn.Parameter(

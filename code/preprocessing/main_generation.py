@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import random
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -20,65 +21,29 @@ from data_processing.mobility_data_processing import (
 from generation.utils import ScenarioType, add_conditions, grid_building
 from torch.utils.data import DataLoader, TensorDataset
 
+
+@dataclass
+class Arguments:
+    scenario: ScenarioType
+    selected_zone: str
+    cond_dim: int
+    input_dim: int
+    horizon: int
+    batch_size: int
+    lr_rate: float
+    num_epochs: int
+    train_percentage: float
+    grid_size: int
+    padding: int
+    kernel_size: int
+    hidden_dim: int
+    latent_dim: int
+    proximity: bool
+    quantity: float | None = None
+
+
 parser = argparse.ArgumentParser(allow_abbrev=False)
-
-# ARGS FOR GENERATION 1st SCENARIO
-parser.add_argument("--scenario", type=str, default="1st")
-parser.add_argument("--cond_dim", type=int, default=2)
-parser.add_argument("--input_dim", type=int, default=2)
-parser.add_argument("--horizon", type=int, default=6 * 7)
-parser.add_argument("--batch_size", type=int, default=5)
-parser.add_argument("--lr_rate", type=float, default=1e-4)
-# in the final model, the number of epochs is set to 250, but for testing purposes we set it to 5
-parser.add_argument("--num_epochs", type=int, default=5)
-parser.add_argument("--train_percentage", type=float, default=0.8)
-parser.add_argument("--grid_size", type=int, default=100)
-parser.add_argument("--padding", type=int, default=1)
-parser.add_argument("--kernel_size", type=int, default=3)
-parser.add_argument("--hidden_dim", type=int, default=32)
-parser.add_argument("--latent_dim", type=int, default=100)
-parser.add_argument("--selected_zone", type=str, default="zone_2")
-parser.add_argument("--proximity", type=bool, default=True)
-
-
-# # ARGS FOR GENERATION 2nd SCENARIO
-# parser.add_argument("--scenario", type=str, default="2nd")
-# parser.add_argument("--cond_dim", type=int, default=2)
-# parser.add_argument("--input_dim", type=int, default=1)
-# parser.add_argument("--horizon", type=int, default=6 * 7)
-# parser.add_argument("--batch_size", type=int, default=5)
-# parser.add_argument("--lr_rate", type=float, default=1e-4)
-# # in the final model, the number of epochs is set to 250, but for testing purposes we set it to 5
-# parser.add_argument("--num_epochs", type=int, default=5)
-# parser.add_argument("--train_percentage", type=float, default=0.8)
-# parser.add_argument("--grid_size", type=int, default=100)
-# parser.add_argument("--padding", type=int, default=1)
-# parser.add_argument("--kernel_size", type=int, default=3)
-# parser.add_argument("--hidden_dim", type=int, default=32)
-# parser.add_argument("--latent_dim", type=int, default=100)
-# parser.add_argument("--selected_zone", type=str, default="zone_2")
-# parser.add_argument("--quantity", type=int, default=200)
-# parser.add_argument("--proximity", type=bool, default=True)
-
-
-# # ARGS FOR GENERATION 3rd SCENARIO
-# parser.add_argument("--scenario", type=str, default="3rd")
-# parser.add_argument("--cond_dim", type=int, default=3)
-# parser.add_argument("--input_dim", type=int, default=2)
-# parser.add_argument("--horizon", type=int, default=6 * 7)
-# parser.add_argument("--batch_size", type=int, default=5)
-# parser.add_argument("--lr_rate", type=float, default=1e-4)
-# # in the final model, the number of epochs is set to 250, but for testing purposes we set it to 5
-# parser.add_argument("--num_epochs", type=int, default=5)
-# parser.add_argument("--train_percentage", type=float, default=0.8)
-# parser.add_argument("--grid_size", type=int, default=100)
-# parser.add_argument("--padding", type=int, default=1)
-# parser.add_argument("--kernel_size", type=int, default=3)
-# parser.add_argument("--hidden_dim", type=int, default=64)
-# parser.add_argument("--latent_dim", type=int, default=100)
-# # for the final model, the proximity is set to True, but for testing purposes we set it to False
-# parser.add_argument("--proximity", type=bool, default=False)
-
+parser.add_argument("--config", type=str)
 
 seed = 42
 random.seed(seed)
@@ -337,7 +302,14 @@ def generate(
 if __name__ == "__main__":
     from typing import cast, get_args
 
+    import yaml
+
     args, _ = parser.parse_known_args()
+
+    with open(Path("configs") / "generation" / (args.config + ".yml"), "r") as f:
+        config = yaml.safe_load(f)
+
+    args = Arguments(**config)
 
     data_dir = Path(os.getenv("DATA_DIR", "../../data/preprocessing"))
     if not data_dir.exists():
@@ -471,7 +443,7 @@ if __name__ == "__main__":
     indices_parkingmeter: dict[int, tuple[int, int]] = {}
     indices_slots: dict[int, tuple[int, int]] = {}
     # Grid matrix building
-    if scenario in ["1st", "3rd"]:
+    if args.scenario in ["1st", "3rd"]:
         (
             matrix,
             indices_slots_,
@@ -482,7 +454,7 @@ if __name__ == "__main__":
             parkingmeters=final_parkingmeters_registry,
             slots=final_slots_registry,
             grid_size=args.grid_size,
-            scenario=scenario,
+            scenario=args.scenario,
             mapping_dict=mapping_dict,
             time_start=time_start,
             time_end=time_end,
@@ -494,7 +466,7 @@ if __name__ == "__main__":
         )
         tensor_matrix = torch.tensor(matrix, dtype=torch.float32).permute(3, 2, 0, 1)
         mask = (tensor_matrix != 0).float()
-        if scenario == "3rd":
+        if args.scenario == "3rd":
             # Generate weather data
             lat = 41.0726
             lon = 14.3323
@@ -523,12 +495,12 @@ if __name__ == "__main__":
             for key in final_slots_registry.keys():
                 (lat_index, lon_index) = indices_slots[key]
                 mask_weather[:, 0, lat_index, lon_index] = torch.tensor(
-                    precipitation_data_4h["precipitation_mask"].values
+                    precipitation_data_4h["precipitation_mask"].values  # type: ignore
                 )
             for key in final_parkingmeters_registry.keys():
                 (lat_index, lon_index) = indices_parkingmeter[key]
                 mask_weather[:, 0, lat_index, lon_index] = torch.tensor(
-                    precipitation_data_4h["precipitation_mask"].values
+                    precipitation_data_4h["precipitation_mask"].values  # type: ignore
                 )
 
             mask = torch.cat([mask, mask_weather], dim=1)
@@ -538,7 +510,7 @@ if __name__ == "__main__":
             parkingmeters=final_parkingmeters_registry,
             slots=final_slots_registry,
             grid_size=args.grid_size,
-            scenario=scenario,
+            scenario=args.scenario,
             mapping_dict=mapping_dict,
             time_start=time_start,
             time_end=time_end,
@@ -594,7 +566,7 @@ if __name__ == "__main__":
     )
 
     # Training
-    model_save_dir = results_dir / "generation" / f"{scenario}"
+    model_save_dir = results_dir / "generation" / f"{args.scenario}"
     if not model_save_dir.exists():
         model_save_dir.mkdir(parents=True)
 
@@ -612,7 +584,7 @@ if __name__ == "__main__":
         device,
         model_save_dir,
         indices_slots,
-        scenario=scenario,
+        scenario=args.scenario,
         num_epochs=args.num_epochs,
         model_args=ModelArgs(
             grid_size=args.grid_size,  # Size of the grid
@@ -637,9 +609,9 @@ if __name__ == "__main__":
         final_slots_registry,
         final_parkingmeters_registry,
         mapping_dict,
-        scenario=scenario,
-        quantity=args.quantity if scenario == "2nd" else None,
-        selected_zone=args.selected_zone if scenario in ["1st", "2nd"] else None,
+        scenario=args.scenario,
+        quantity=args.quantity if args.scenario == "2nd" else None,
+        selected_zone=args.selected_zone if args.scenario in ["1st", "2nd"] else None,
     )
 
     fake_data = generate(

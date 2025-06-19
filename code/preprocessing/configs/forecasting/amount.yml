@@ -1,0 +1,26 @@
+data_type: amount
+target_channel: 0
+# input_length: 672  # 24 * 7 * 4  # commented out because there are not enough data for the publicly reduced data for training
+input_length: 168 # 24 * 7
+horizon: 168 # 24 * 7
+batch_size: 128
+use_gps: true
+num_nodes: 96
+node_dim: 16
+input_dim: 1
+embed_dim: 512
+num_layer: 1
+temp_dim_tid: 8
+temp_dim_diw: 8
+time_of_day_size: 24
+day_of_week_size: 7
+if_T_i_D: true
+if_D_i_W: true
+use_poi: true
+if_node: true
+exogenous_dim: 13
+num_poi_types: 7
+# num_epochs: 1000  # commented out for testing purposes
+num_epochs: 5
+# train_percentage: 0.9  # commented out because there are not enough data for the publicly reduced data for training
+train_percentage: 0.8

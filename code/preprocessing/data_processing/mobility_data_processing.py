@@ -204,12 +204,12 @@ def preprocess_sensor_data(
     df_cleaned["hour"] = df_cleaned["datetime"].dt.floor("H")
 
     # Filter rows with status_change = 1
-    df_signals = df_cleaned[df_cleaned["status_change"] == 1]
+    df_signals = df_cleaned[df_cleaned["status_change"] == 1].copy()
     df_signals.drop(columns=["status_change"], inplace=True)
 
     # Identify and filter rows with meaningful changes
     df_signals["check"] = df_signals["occupied"].diff()
-    df_signals = df_signals[df_signals["check"] != 0]
+    df_signals = df_signals[df_signals["check"] != 0].copy()
     df_signals.drop(columns=["check"], inplace=True)
 
     # Calculate time differences and filter by conditions
@@ -226,7 +226,7 @@ def preprocess_sensor_data(
 
     # Final processing
     df_signals["check"] = df_signals["occupied"].diff()
-    df_signals = df_signals[df_signals["check"] != 0]
+    df_signals = df_signals[df_signals["check"] != 0].copy()
 
     # Prepare columns for output
     df_signals.drop(

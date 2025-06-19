@@ -40,12 +40,18 @@ RUN arch=$(uname -m) && \
     rm /tmp/miniconda.sh && \
     conda update --all --yes && \
     ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh && \
-    echo ". /opt/conda/etc/profile.d/conda.sh" >> ~/.bashrc && \
     conda install -n base --override-channels --yes -c conda-forge mamba 'python_abi=*=*cp*' && \
-    echo ". /opt/conda/etc/profile.d/mamba.sh" >> ~/.bashrc && \
     mamba env create -f environment.yaml -n appenv --yes && \
     conda clean --all && \
     rm -rf ./environment.yaml && \
+    echo "Downloading patch to suppress pytorch ResourceWarning" && \
+    wget https://github.com/pytorch/pytorch/commit/9b7130b8db62e9e550366419fa33c0f530d80beb.patch -O /tmp/torch-patch.patch && \
+    cd /opt/conda/envs/appenv/lib/python3.11/site-packages && \
+    git apply /tmp/torch-patch.patch && \
+    rm /tmp/torch-patch.patch && \
+    echo ". /opt/conda/etc/profile.d/conda.sh" >> ~/.bashrc && \
+    echo "export MAMBA_ROOT_PREFIX=/opt/conda" >> ~/.bashrc && \
+    echo ". /opt/conda/etc/profile.d/mamba.sh" >> ~/.bashrc && \
     echo "conda activate appenv" >> ~/.bashrc
 
 WORKDIR /app/scheduling/

@@ -1,3 +1,5 @@
 #!/bin/bash
 
-python main_generation.py
+CONFIG=${1:-"1stscenario"}
+
+python main_generation.py --config=$CONFIG
