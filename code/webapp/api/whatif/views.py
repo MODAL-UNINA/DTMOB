@@ -103,6 +103,8 @@ def run_generation(
     print(f"[{ans_time}] {head_msg} - generating data")
     import torch.multiprocessing as mp
 
+    mp.set_start_method("spawn", force=True)
+
     manager = mp.Manager()
     return_dict: ReturnDict = manager.dict()
 

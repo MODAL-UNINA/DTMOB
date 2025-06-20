@@ -601,6 +601,8 @@ def do_get_prediction(
 
     import torch.multiprocessing as mp
 
+    mp.set_start_method("spawn", force=True)
+
     manager = mp.Manager()
     return_dict: "DictProxy[str, FloatArray]" = manager.dict()
 
