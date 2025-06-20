@@ -322,6 +322,10 @@ def do_get_generation(
 ) -> tuple[str, FloatArray, WhatIfDataDict]:
     start_date, end_date = get_week_range(date)
 
+    if quantity is None:
+        if scenario == "2nd":
+            quantity = 150
+
     distances_p = data["distances_p"]
     distances_s = data["distances_s"]
     scenario_data = data["scenarios"][scenario]
@@ -380,6 +384,9 @@ def do_get_generation(
         scenario_params=scenario_params,
     )
 
+    mask = data_key["cond"].clone()
+    mask = mask.permute(0, 2, 1, 3, 4)
+
     import torch.multiprocessing as mp
 
     mp.set_start_method("spawn", force=True)
@@ -392,9 +399,9 @@ def do_get_generation(
         args=(
             return_dict,
             scenario,
-            data_key,
             zone_name,
             quantity,
+            mask,
             parkingmeters_coordinates,
             parkingslots_coordinates,
             data_path,
@@ -413,9 +420,9 @@ def do_get_generation(
 def get_generation(
     return_dict: "DictProxy[str, FloatArray]",
     scenario: WhatIfScenarioType,
-    data_key: WhatIfDataDict,
     zone_name: str,
     quantity: int | None,
+    mask: torch.Tensor,
     parkingmeters_coordinates: WhatIfPCoordinatesMapping | None,
     parkingslots_coordinates: WhatIfSCoordinatesMapping | None,
     models_dir: Path,
@@ -439,13 +446,6 @@ def get_generation(
     os.environ["PYTHONHASHSEED"] = str(seed)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-    mask = data_key["cond"].clone()
-    mask = mask.permute(0, 2, 1, 3, 4)
-
-    if quantity is None:
-        if scenario == "2nd":
-            quantity = 150
 
     p_keys_to_remove: list[int] = []
     s_keys_to_remove: list[int] = []
@@ -565,6 +565,7 @@ def get_generation(
         assert parkingslots_coordinates is not None, (
             "s_coords should not be None for the 2nd scenario."
         )
+        assert quantity is not None, "quantity should not be None for the 2nd scenario."
 
         s_keys = zone_dict[zone_name]["stalli"]
         s_keys = [int(key) for key in s_keys]
