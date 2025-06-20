@@ -253,6 +253,7 @@ def predict(
 
     """
     import os
+    from typing import cast
 
     seed = 42
     random.seed(seed)
@@ -288,13 +289,18 @@ def predict(
     model.eval()
     with torch.no_grad():
         prediction, _, _, _ = model(seasonal, residual, trend, exog, poi_tensor, mask)
-    prediction = prediction.cpu().detach().numpy()
+    prediction = cast(
+        FloatArray,
+        cast(torch.Tensor, prediction).numpy(  # type: ignore
+            force=True
+        ),
+    )
 
-    prediction = data_scaler.inverse_transform(  # type: ignore
+    prediction[:] = data_scaler.inverse_transform(  # type: ignore
         prediction.reshape(-1, prediction.shape[2])
     ).reshape(prediction.shape)
-    prediction = prediction.astype(int)
-    prediction = np.maximum(prediction, 0)
+    prediction[:] = np.clip(prediction, 0, None)
+    prediction[:] = np.floor(prediction)
 
     if data_type == "amount":
         prediction[(prediction < 30) & (prediction > 0)] = 0
