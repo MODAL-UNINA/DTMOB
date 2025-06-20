@@ -273,6 +273,11 @@ if __name__ == "__main__":
 
     args, _ = parser.parse_known_args()
 
+    print(
+        f"Running forecasting using configuration: {args.config}. "
+        f"Execution may take a while..."
+    )
+
     with open(Path("configs") / "forecasting" / (args.config + ".yml"), "r") as f:
         config = yaml.safe_load(f)
 

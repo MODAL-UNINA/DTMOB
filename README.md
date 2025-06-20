@@ -36,7 +36,7 @@ The available data for the execution of all the scripts is provided at the follo
 Download the zip file in the `data/` folder and unzip it with the following command from the terminal:
 
 ```sh
-unzip Data_DTMOB.zip
+unzip Data_DTMOB1.2.zip
 ```
 
 this will create two folders inside data: `preprocessing` and `webapp`.
@@ -65,40 +65,40 @@ this will start a new shell session in the generated container
 #### 1. Forecasting
 
 Three different configurations for the forecasting are available in the folder `code/preprocessing/configs/forecasting`:
-- Transactions (transactions.yml), for the parking meter transactions forecasting
-- Revenue (amount.yml), for the parking meter revenue forecasting
-- Road occupancy (roads.yml), for the road occupancy forecasting
+- [Transactions](./code/preprocessing/configs/forecasting/transactions.yml), for the parking meter transactions forecasting
+- [Revenue](./code/preprocessing/configs/forecasting/amount.yml), for the parking meter revenue forecasting
+- [Road occupancy](./code/preprocessing/configs/forecasting/roads.yml), for the road occupancy forecasting
 
-To run one of these configurations, from the shell, run the following for the forecasting:
+To run one of these configurations, run the following from inside the container:
 
 ```sh
-bash run_forecasting.sh <config_name>
+bash run_forecasting.sh $CONFIG
 ```
 
-where `<config_name>` can be `transactions`, `amount`, or `roads` depending on the configuration you want to run.
+where `$CONFIG` can be `transactions`, `amount`, or `roads` depending on the configuration you want to run.
 
 The results are saved in the `results/preprocessing/forecasting` folder relative to the project folder.
 
 #### 2. Generation
 Three different configurations for the generation are available in the folder `code/preprocessing/configs/generation`:
-- First scenario (1stscenario.yml), for the first scenario generation
-- Second scenario (2ndscenario.yml), for the second scenario generation
-- Third scenario (3rdscenario.yml), for the third scenario generation
+- [First scenario](./code/preprocessing/configs/generation/1stscenario.yml), for the first scenario generation
+- [Second scenario](./code/preprocessing/configs/generation/2ndscenario.yml), for the second scenario generation
+- [Third scenario](./code/preprocessing/configs/generation/3rdscenario.yml), for the third scenario generation
 
-To run one of these configurations, from the shell, run the following for the generation:
+To run one of these configurations, run the following from inside the container:
 
 ```sh
-bash run_generation.sh <config_name>
+bash run_generation.sh $CONFIG
 ```
 
-where `<config_name>` can be `1stscenario`, `2ndscenario`, or `3rdscenario` depending on the configuration you want to run.
+where `$CONFIG` can be `1stscenario`, `2ndscenario`, or `3rdscenario` depending on the configuration you want to run.
 
 The results are saved in the `results/preprocessing/generation` folder.
 
 #### 3. Scheduling
 For the agent scheduling the only configurable option is the date in the format `YYYY-MM-DD`.
 
-For example, for 12th January 2025, run the following:
+For example, to get the calendar for 12th January 2025, run the following:
 
 ```sh
 bash run_scheduling.sh 2025-01-12
