@@ -30,7 +30,6 @@ from api.whatif.data import (
     WhatIfRoadMapping,
     WhatIfScenarioType,
     WhatIfSCoordinatesMapping,
-    DistanceData,
 )
 
 FloatData = np.float32
@@ -42,17 +41,6 @@ class WhatIfDataDict(TypedDict):
     data: torch.Tensor
     start_date: str
     end_date: str
-
-
-def _generation(
-    encoder: Encoder, generator: Generator, mask: torch.Tensor, device: torch.device
-) -> torch.Tensor:
-    with torch.no_grad():
-        z_gen, _, _, indices, map = encoder(mask.to(device))
-        noise = torch.randn(z_gen.shape[0], 100).to(device)
-        z_gen = torch.cat([noise, z_gen], dim=1)
-        output = generator(z_gen, map, indices)
-    return output
 
 
 def get_week_range(date: pd.Timestamp) -> tuple[pd.Timestamp, pd.Timestamp]:
@@ -259,57 +247,6 @@ def build_data_dict(
         raise ValueError(f"Unknown scenario type: {scenario}")
 
 
-def _load_models(
-    data_path: Path, scenario: WhatIfScenarioType, device: torch.device
-) -> tuple[Generator, Encoder]:
-    if scenario not in SCENARIOS:
-        raise ValueError("Invalid scenario")
-
-    latent_dim = 100
-    kernel_size = 3
-    padding = 1
-    input_dim = 2 if scenario != "2nd" else 1
-    cond_dim = 2 if scenario != "3rd" else 3
-    hidden_dim = 32 if scenario != "3rd" else 64
-    horizon = 6 * 7
-    grid_size = 100
-
-    model_args = ModelArgs(
-        input_dim=input_dim,
-        cond_dim=cond_dim,
-        latent_dim=latent_dim,
-        hidden_dim=hidden_dim,
-        kernel_size=kernel_size,
-        padding=padding,
-        horizon=horizon,
-        grid_size=grid_size,
-        use_proximity=False,
-    )
-
-    generator = Generator(model_args).to(device)
-    encoder = Encoder(model_args).to(device)
-
-    models_path = data_path / f"{scenario}" / "models"
-    generator.load_state_dict(
-        torch.load(  # type: ignore
-            models_path / "generator.pth",
-            map_location=device,
-            weights_only=True,
-        )
-    )
-    encoder.load_state_dict(
-        torch.load(  # type: ignore
-            models_path / "encoder_cond.pth",
-            map_location=device,
-            weights_only=True,
-        )
-    )
-    generator.eval()
-    encoder.eval()
-
-    return generator, encoder
-
-
 def do_get_generation(
     scenario: WhatIfScenarioType,
     date: pd.Timestamp,
@@ -386,66 +323,6 @@ def do_get_generation(
 
     mask = data_key["cond"].clone()
     mask = mask.permute(0, 2, 1, 3, 4)
-
-    import torch.multiprocessing as mp
-
-    mp.set_start_method("spawn", force=True)
-
-    manager = mp.Manager()
-    return_dict: "DictProxy[str, FloatArray]" = manager.dict()
-
-    p = mp.Process(
-        target=get_generation,
-        args=(
-            return_dict,
-            scenario,
-            zone_name,
-            quantity,
-            mask,
-            parkingmeters_coordinates,
-            parkingslots_coordinates,
-            data_path,
-            distances_p,
-            distances_s,
-            zone_dict,
-            zones,
-        ),
-    )
-    p.start()
-    p.join()
-
-    return range_s, return_dict["generation"], data_key
-
-
-def get_generation(
-    return_dict: "DictProxy[str, FloatArray]",
-    scenario: WhatIfScenarioType,
-    zone_name: str,
-    quantity: int | None,
-    mask: torch.Tensor,
-    parkingmeters_coordinates: WhatIfPCoordinatesMapping | None,
-    parkingslots_coordinates: WhatIfSCoordinatesMapping | None,
-    models_dir: Path,
-    distances_p: DistanceData,
-    distances_s: DistanceData,
-    zone_dict: ZoneDictZoneDataMapping,
-    zones: list[str],
-) -> None:
-    import os
-    from typing import cast
-
-    # Seed params
-    seed = 42
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)  # type: ignore
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    os.environ["PYTHONHASHSEED"] = str(seed)
-
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     p_keys_to_remove: list[int] = []
     s_keys_to_remove: list[int] = []
@@ -607,6 +484,120 @@ def get_generation(
             )
             mask[0, 2, :18, lat, lon] = 1
             mask[0, 2, 18:, lat, lon] = 0
+
+    import torch.multiprocessing as mp
+
+    mp.set_start_method("spawn", force=True)
+
+    manager = mp.Manager()
+    return_dict: "DictProxy[str, FloatArray]" = manager.dict()
+
+    p = mp.Process(
+        target=get_generation,
+        args=(
+            return_dict,
+            scenario,
+            mask,
+            parkingmeters_coordinates,
+            parkingslots_coordinates,
+            p_keys_to_remove,
+            s_keys_to_remove,
+            data_path,
+        ),
+    )
+    p.start()
+    p.join()
+
+    return range_s, return_dict["generation"], data_key
+
+
+def _load_models(
+    data_path: Path, scenario: WhatIfScenarioType, device: torch.device
+) -> tuple[Generator, Encoder]:
+    if scenario not in SCENARIOS:
+        raise ValueError("Invalid scenario")
+
+    latent_dim = 100
+    kernel_size = 3
+    padding = 1
+    input_dim = 2 if scenario != "2nd" else 1
+    cond_dim = 2 if scenario != "3rd" else 3
+    hidden_dim = 32 if scenario != "3rd" else 64
+    horizon = 6 * 7
+    grid_size = 100
+
+    model_args = ModelArgs(
+        input_dim=input_dim,
+        cond_dim=cond_dim,
+        latent_dim=latent_dim,
+        hidden_dim=hidden_dim,
+        kernel_size=kernel_size,
+        padding=padding,
+        horizon=horizon,
+        grid_size=grid_size,
+        use_proximity=False,
+    )
+
+    generator = Generator(model_args).to(device)
+    encoder = Encoder(model_args).to(device)
+
+    models_path = data_path / f"{scenario}" / "models"
+    generator.load_state_dict(
+        torch.load(  # type: ignore
+            models_path / "generator.pth",
+            map_location=device,
+            weights_only=True,
+        )
+    )
+    encoder.load_state_dict(
+        torch.load(  # type: ignore
+            models_path / "encoder_cond.pth",
+            map_location=device,
+            weights_only=True,
+        )
+    )
+    generator.eval()
+    encoder.eval()
+
+    return generator, encoder
+
+
+def _generation(
+    encoder: Encoder, generator: Generator, mask: torch.Tensor, device: torch.device
+) -> torch.Tensor:
+    with torch.no_grad():
+        z_gen, _, _, indices, map = encoder(mask.to(device))
+        noise = torch.randn(z_gen.shape[0], 100).to(device)
+        z_gen = torch.cat([noise, z_gen], dim=1)
+        output = generator(z_gen, map, indices)
+    return output
+
+
+def get_generation(
+    return_dict: "DictProxy[str, FloatArray]",
+    scenario: WhatIfScenarioType,
+    mask: torch.Tensor,
+    parkingmeters_coordinates: WhatIfPCoordinatesMapping | None,
+    parkingslots_coordinates: WhatIfSCoordinatesMapping | None,
+    p_keys_to_remove: list[int],
+    s_keys_to_remove: list[int],
+    models_dir: Path,
+) -> None:
+    import os
+    from typing import cast
+
+    # Seed params
+    seed = 42
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)  # type: ignore
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    os.environ["PYTHONHASHSEED"] = str(seed)
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     generator, encoder = _load_models(models_dir, scenario, device)
     output_t = _generation(encoder, generator, mask, device)
