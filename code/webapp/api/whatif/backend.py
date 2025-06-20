@@ -12,8 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
-from common.generation.models import Encoder, Generator
-from common.generation.models import ModelArgs as TorchModelArgs
+from common.generation.models import Encoder, Generator, ModelArgs
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from numpy.typing import NDArray
@@ -280,7 +279,7 @@ def _load_models(
     horizon = 6 * 7
     grid_size = 100
 
-    model_args = TorchModelArgs(
+    model_args = ModelArgs(
         input_dim=input_dim,
         cond_dim=cond_dim,
         latent_dim=latent_dim,

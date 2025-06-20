@@ -13,7 +13,7 @@ ForecastDataType = Literal["transactions", "amount", "roads"]
 FORECAST_DATA_TYPES = cast(list[ForecastDataType], get_args(ForecastDataType))
 
 
-class ModelArgs(TypedDict):
+class ForecastModelArgs(TypedDict):
     num_nodes: int
     node_dim: int
     input_len: int
@@ -32,16 +32,6 @@ class ModelArgs(TypedDict):
     if_gps: bool
     num_poi_types: int
     exogenous_dim: NotRequired[int]
-
-
-class ForecastArgs(TypedDict):
-    data_type: ForecastDataType
-    target_channel: int
-    batch_size: int
-    use_decomposition: bool
-    use_exog: bool
-    num_epochs: int
-    model_args: ModelArgs
 
 
 class WeatherData(TypedDict):
@@ -64,7 +54,7 @@ class OriginalForecastData(TypedDict):
     poi_categories: dict[ForecastDataType, pd.DataFrame]
     data_scaler: dict[ForecastDataType, MinMaxScaler]
     exog_scaler: dict[ForecastDataType, MinMaxScaler]
-    model_args: dict[ForecastDataType, ForecastArgs]
+    model_args: dict[ForecastDataType, ForecastModelArgs]
     index_map: ForecastIndexMapData
 
 

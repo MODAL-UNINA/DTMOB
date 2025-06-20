@@ -11,8 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
-from common.forecasting.models import ModelArgs as TorchModelArgs
-from common.forecasting.models import Modelcomplete
+from common.forecasting.models import ModelArgs, Modelcomplete
 from matplotlib.figure import Figure
 from sklearn.preprocessing import MinMaxScaler
 from statsmodels.tsa.seasonal import STL  # type: ignore
@@ -20,11 +19,10 @@ from statsmodels.tsa.seasonal import STL  # type: ignore
 from api.forecast.data import (
     BoolArray,
     FloatArray,
-    ForecastArgs,
     ForecastData,
     ForecastDataType,
     ForecastIndexMapData,
-    ModelArgs,
+    ForecastModelArgs,
 )
 from api.general.data import ZoneDictZoneDataMapping
 from api.general.utils.error_status import ErrorStatus
@@ -204,13 +202,13 @@ def decompose_data(
 def get_date_range(
     data_type: ForecastDataType,
     hourly_scaled_map: dict[ForecastDataType, pd.DataFrame],
-    model_args: dict[ForecastDataType, ForecastArgs],
+    model_args: dict[ForecastDataType, ForecastModelArgs],
 ) -> AvailableDatetimes | ErrorStatus:
     if data_type not in hourly_scaled_map:
         return ErrorStatus(error=f"data_type {data_type} not supported")
 
-    input_len = model_args[data_type]["model_args"]["input_len"]
-    output_len = model_args[data_type]["model_args"]["output_len"]
+    input_len = model_args[data_type]["input_len"]
+    output_len = model_args[data_type]["output_len"]
 
     hourly_scaled = hourly_scaled_map[data_type]
     min_date = cast(
@@ -230,7 +228,7 @@ def get_date_range(
 
 def predict(
     return_dict: "DictProxy[str, FloatArray]",
-    model_args: ModelArgs,
+    model_args: ForecastModelArgs,
     model_path: Path,
     data: ForecastDecomposedData,
     poi_arr: FloatArray,
@@ -281,7 +279,7 @@ def predict(
     trend = torch.tensor(trend, dtype=torch.float32).to(device)
     exog = torch.tensor(exog, dtype=torch.float32).to(device)
 
-    model = Modelcomplete(TorchModelArgs(**model_args)).to(device)
+    model = Modelcomplete(ModelArgs(**model_args)).to(device)
     model.load_state_dict(
         torch.load(  # type: ignore
             model_path, map_location=device, weights_only=True
@@ -562,7 +560,7 @@ def do_get_prediction(
     forecast_data = data["forecast_data"]
     preprocessed_data = data["preprocessed_data"]
 
-    model_args = forecast_data["model_args"][data_type]["model_args"]
+    model_args = forecast_data["model_args"][data_type]
 
     hourly_scaled = preprocessed_data["hourly_scaled"][data_type]
     exog_scaled = preprocessed_data["exog_scaled"][data_type]
@@ -574,7 +572,7 @@ def do_get_prediction(
     )
 
     if "error" in date_range:
-        return cast(ErrorStatus, date_range)
+        return date_range
 
     min_date = date_range["min_date"]
     max_date = date_range["max_date"]

@@ -38,8 +38,6 @@ class ForecastRoadResult(TypedDict):
 
 
 def get_available_forecasting_dates() -> AvailableDates | ErrorStatus:
-    from typing import cast
-
     forecast_data = get_data()
     model_args = forecast_data["forecast_data"]["model_args"]
     preprocessed_data = forecast_data["preprocessed_data"]
@@ -59,7 +57,7 @@ def get_available_forecasting_dates() -> AvailableDates | ErrorStatus:
             model_args=model_args,
         )
         if "error" in date_range:
-            return cast(ErrorStatus, date_range)
+            return date_range
 
         min_date = date_range["min_date"]
         max_date = date_range["max_date"]
@@ -103,13 +101,11 @@ def get_available_forecasting_roads(zone_name: str) -> dict[str, str]:
 def get_plot_forecast_transactions(
     zone_name: str, date: pd.Timestamp, parkingmeter_id: int | None
 ) -> ForecastTransactionsResult | ErrorStatus:
-    from typing import cast
-
     import matplotlib.pyplot as plt
 
     date_range = get_available_forecasting_dates()
     if "error" in date_range:
-        return cast(ErrorStatus, date_range)
+        return date_range
 
     zone_dict = get_zone_dict()
 
@@ -144,13 +140,11 @@ def get_plot_forecast_transactions(
 def get_plot_forecast_amount(
     zone_name: str, date: pd.Timestamp, parkingmeter_id: int | None
 ) -> ForecastAmountResult | ErrorStatus:
-    from typing import cast
-
     import matplotlib.pyplot as plt
 
     date_range = get_available_forecasting_dates()
     if "error" in date_range:
-        return cast(ErrorStatus, date_range)
+        return date_range
 
     zone_dict = get_zone_dict()
 
@@ -186,13 +180,11 @@ def get_plot_forecast_amount(
 def get_plot_forecast_roads(
     zone_name: str, date: pd.Timestamp, road_id: int | None
 ) -> ForecastRoadResult | ErrorStatus:
-    from typing import cast
-
     import matplotlib.pyplot as plt
 
     date_range = get_available_forecasting_dates()
     if "error" in date_range:
-        return cast(ErrorStatus, date_range)
+        return date_range
 
     zone_dict = get_zone_dict()
 
