@@ -17,7 +17,6 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from numpy.typing import NDArray
 from sklearn.pipeline import Pipeline
-from torch import nn
 
 from api.general.data import ZoneDictZoneDataMapping
 from api.general.utils.error_status import ErrorStatus
@@ -31,6 +30,7 @@ from api.whatif.data import (
     WhatIfRoadMapping,
     WhatIfScenarioType,
     WhatIfSCoordinatesMapping,
+    DistanceData,
 )
 
 FloatData = np.float32
@@ -45,7 +45,7 @@ class WhatIfDataDict(TypedDict):
 
 
 def _generation(
-    encoder: nn.Module, generator: nn.Module, mask: torch.Tensor, device: torch.device
+    encoder: Encoder, generator: Generator, mask: torch.Tensor, device: torch.device
 ) -> torch.Tensor:
     with torch.no_grad():
         z_gen, _, _, indices, map = encoder(mask.to(device))
@@ -320,64 +320,10 @@ def do_get_generation(
     zone_dict: ZoneDictZoneDataMapping,
     zones: list[str],
 ) -> tuple[str, FloatArray, WhatIfDataDict]:
-    import torch.multiprocessing as mp
-
-    mp.set_start_method("spawn", force=True)
-
-    manager = mp.Manager()
-    return_dict: "DictProxy[str, tuple[str, FloatArray, WhatIfDataDict]]" = (
-        manager.dict()
-    )
-
-    p = mp.Process(
-        target=get_generation,
-        args=(
-            return_dict,
-            scenario,
-            date,
-            zone_name,
-            quantity,
-            data_path,
-            data,
-            zone_dict,
-            zones,
-        ),
-    )
-    p.start()
-    p.join()
-
-    return return_dict["generation"]
-
-
-def get_generation(
-    return_dict: "DictProxy[str, tuple[str, FloatArray, WhatIfDataDict]]",
-    scenario: WhatIfScenarioType,
-    date: pd.Timestamp,
-    zone_name: str,
-    quantity: int | None,
-    models_dir: Path,
-    data: WhatIfLoadedData,
-    zone_dict: ZoneDictZoneDataMapping,
-    zones: list[str],
-) -> None:
-    import os
-    from typing import cast
-
-    # Seed params
-    seed = 42
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)  # type: ignore
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    os.environ["PYTHONHASHSEED"] = str(seed)
-
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
     start_date, end_date = get_week_range(date)
 
+    distances_p = data["distances_p"]
+    distances_s = data["distances_s"]
     scenario_data = data["scenarios"][scenario]
     final_parkingmeters = scenario_data.get("final_parkingmeters")
     final_parkingslots = scenario_data["final_parkingslots"]
@@ -434,6 +380,66 @@ def get_generation(
         scenario_params=scenario_params,
     )
 
+    import torch.multiprocessing as mp
+
+    mp.set_start_method("spawn", force=True)
+
+    manager = mp.Manager()
+    return_dict: "DictProxy[str, FloatArray]" = manager.dict()
+
+    p = mp.Process(
+        target=get_generation,
+        args=(
+            return_dict,
+            scenario,
+            data_key,
+            zone_name,
+            quantity,
+            parkingmeters_coordinates,
+            parkingslots_coordinates,
+            data_path,
+            distances_p,
+            distances_s,
+            zone_dict,
+            zones,
+        ),
+    )
+    p.start()
+    p.join()
+
+    return range_s, return_dict["generation"], data_key
+
+
+def get_generation(
+    return_dict: "DictProxy[str, FloatArray]",
+    scenario: WhatIfScenarioType,
+    data_key: WhatIfDataDict,
+    zone_name: str,
+    quantity: int | None,
+    parkingmeters_coordinates: WhatIfPCoordinatesMapping | None,
+    parkingslots_coordinates: WhatIfSCoordinatesMapping | None,
+    models_dir: Path,
+    distances_p: DistanceData,
+    distances_s: DistanceData,
+    zone_dict: ZoneDictZoneDataMapping,
+    zones: list[str],
+) -> None:
+    import os
+    from typing import cast
+
+    # Seed params
+    seed = 42
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)  # type: ignore
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    os.environ["PYTHONHASHSEED"] = str(seed)
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
     mask = data_key["cond"].clone()
     mask = mask.permute(0, 2, 1, 3, 4)
 
@@ -444,12 +450,12 @@ def get_generation(
     p_keys_to_remove: list[int] = []
     s_keys_to_remove: list[int] = []
 
-    distances_p = data["distances_p"]
-    distances_s = data["distances_s"]
-
     if scenario == "1st":
         assert parkingmeters_coordinates is not None, (
             "p_coords should not be None for the 1st scenario."
+        )
+        assert parkingslots_coordinates is not None, (
+            "s_coords should not be None for the 1st scenario."
         )
         adjacent_zones = [zone for zone in zones if zone != zone_name]
 
@@ -556,6 +562,10 @@ def get_generation(
             lat, lon = parkingslots_coordinates[key]
             mask[0, 0, :, lat, lon] = 0
     if scenario == "2nd":
+        assert parkingslots_coordinates is not None, (
+            "s_coords should not be None for the 2nd scenario."
+        )
+
         s_keys = zone_dict[zone_name]["stalli"]
         s_keys = [int(key) for key in s_keys]
 
@@ -578,6 +588,10 @@ def get_generation(
         assert parkingmeters_coordinates is not None, (
             "p_coords should not be None for the 3rd scenario."
         )
+        assert parkingslots_coordinates is not None, (
+            "s_coords should not be None for the 3rd scenario."
+        )
+
         for slot in parkingslots_coordinates.keys():
             lat, lon = (
                 parkingslots_coordinates[slot][0],
@@ -600,6 +614,10 @@ def get_generation(
         assert parkingmeters_coordinates is not None, (
             "p_coords should not be None for the 1st scenario."
         )
+        assert parkingslots_coordinates is not None, (
+            "s_coords should not be None for the 1st scenario."
+        )
+
         for k in p_keys_to_remove:
             lat, lon = parkingmeters_coordinates[k]
             output_t[0, 1, :, lat, lon] = 0
@@ -608,10 +626,12 @@ def get_generation(
             output_t[0, 0, :, lat, lon] = 0
     output = cast(
         FloatArray,
-        output_t.detach().cpu().numpy(),  # type: ignore
+        output_t.numpy(  # type: ignore
+            force=True
+        ),
     )
 
-    return_dict["generation"] = range_s, output, data_key
+    return_dict["generation"] = output
 
 
 def _get_dfs_parkingmeter(
