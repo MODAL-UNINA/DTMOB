@@ -18,12 +18,11 @@ from api.general.views import get_area_id, get_hour_slots_items, get_zone_dict
 from .backend import (
     FloatArray,
     GenerationData,
-    ReturnDict,
     create_cumulative_plot,
     create_heatmap,
     create_histograms_with_inset,
     create_radar_chart_map,
-    get_generation,
+    do_get_generation,
     is_data_kind_valid,
     prepare_generated_data,
 )
@@ -101,37 +100,10 @@ def run_generation(
 
     ans_time = f"{datetime.now()}"
     print(f"[{ans_time}] {head_msg} - generating data")
-    import torch.multiprocessing as mp
 
-    mp.set_start_method("spawn", force=True)
-
-    manager = mp.Manager()
-    return_dict: ReturnDict = manager.dict()
-
-    p = mp.Process(
-        target=get_generation,
-        args=(
-            return_dict,
-            scenario,
-            date,
-            zone_name,
-            quantity,
-            data_path,
-            data,
-            zone_dict,
-            zones,
-        ),
+    res = do_get_generation(
+        scenario, date, zone_name, quantity, data_path, data, zone_dict, zones
     )
-    p.start()
-    p.join()
-
-    res = return_dict["generation"]
-
-    ans_time = f"{datetime.now()}"
-    print(f"[{ans_time}] {head_msg} - cleaning up")
-
-    if isinstance(res, dict):
-        return res
 
     ans_time = f"{datetime.now()}"
     print(f"[{ans_time}] {head_msg} - parsing generation")

@@ -2,7 +2,7 @@ import random
 from dataclasses import dataclass
 from multiprocessing.managers import DictProxy
 from pathlib import Path
-from typing import TypeAlias, TypedDict
+from typing import TypedDict
 
 import matplotlib
 
@@ -42,11 +42,6 @@ class WhatIfDataDict(TypedDict):
     data: torch.Tensor
     start_date: str
     end_date: str
-
-
-ReturnDict: TypeAlias = (
-    "DictProxy[str, tuple[str, FloatArray, WhatIfDataDict] | ErrorStatus]"
-)
 
 
 def _generation(
@@ -315,8 +310,47 @@ def _load_models(
     return generator, encoder
 
 
+def do_get_generation(
+    scenario: WhatIfScenarioType,
+    date: pd.Timestamp,
+    zone_name: str,
+    quantity: int | None,
+    data_path: Path,
+    data: WhatIfLoadedData,
+    zone_dict: ZoneDictZoneDataMapping,
+    zones: list[str],
+) -> tuple[str, FloatArray, WhatIfDataDict]:
+    import torch.multiprocessing as mp
+
+    mp.set_start_method("spawn", force=True)
+
+    manager = mp.Manager()
+    return_dict: "DictProxy[str, tuple[str, FloatArray, WhatIfDataDict]]" = (
+        manager.dict()
+    )
+
+    p = mp.Process(
+        target=get_generation,
+        args=(
+            return_dict,
+            scenario,
+            date,
+            zone_name,
+            quantity,
+            data_path,
+            data,
+            zone_dict,
+            zones,
+        ),
+    )
+    p.start()
+    p.join()
+
+    return return_dict["generation"]
+
+
 def get_generation(
-    return_dict: ReturnDict,
+    return_dict: "DictProxy[str, tuple[str, FloatArray, WhatIfDataDict]]",
     scenario: WhatIfScenarioType,
     date: pd.Timestamp,
     zone_name: str,
