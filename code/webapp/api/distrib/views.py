@@ -64,35 +64,31 @@ def get_occupancy_plot_inner(
     zone_name: str,
     date: pd.Timestamp | None,
     hour_range: list[int] | None,
-    parkingslot: int | None,
+    parkingslot_id: int | None,
     legality_status: LegalityStatus | None,
 ) -> Figure:
     zone_dict = get_zone_dict()
-    slot_id = parkingslot
+
     if legality_status is None:
         all_sensors = get_status_sensors()
         return plot2(
             all_sensors,
             zone_dict=zone_dict,
             zone_name=zone_name,
-            slot_id=slot_id,
+            parkingslot_id=parkingslot_id,
             date=date,
             hour_range=hour_range,
         )
 
-    assert legality_status in ["occupied_regularly", "occupied_abusively"]
-
     status_sensors = get_status_sensors()
-    data_type = legality_status
-
     return plot3(
         status_sensors,
         zone_dict=zone_dict,
         zone_name=zone_name,
-        slot_id=slot_id,
+        parkingslot_id=parkingslot_id,
         date=date,
         hour_range=hour_range,
-        data_type=data_type,
+        data_type=legality_status,
     )
 
 

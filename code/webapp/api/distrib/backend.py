@@ -22,7 +22,7 @@ def plot1(
 ) -> Figure:
     if parkingmeter_id is not None:
         if parkingmeter_id not in zone_dict[zone_name]["parcometro"]:
-            raise ValueError(f"parkimeter_id {parkingmeter_id} not in {zone_name}")
+            raise ValueError(f"Parking meter {parkingmeter_id} not in {zone_name}")
 
     if parkingmeter_id is not None:
         parkingmeters_id = [parkingmeter_id]
@@ -110,16 +110,16 @@ def plot2(
     data: pd.DataFrame,
     zone_dict: ZoneDictZoneDataMapping,
     zone_name: str = "all_map",
-    slot_id: int | None = None,
+    parkingslot_id: int | None = None,
     date: pd.Timestamp | None = None,
     hour_range: list[int] | None = None,
 ) -> Figure:
-    if slot_id is not None:
-        if slot_id not in zone_dict[zone_name]["stalli"]:
-            raise ValueError(f"slot_id {slot_id} not in {zone_name}")
+    if parkingslot_id is not None:
+        if parkingslot_id not in zone_dict[zone_name]["stalli"]:
+            raise ValueError(f"Parking slot {parkingslot_id} not in {zone_name}")
 
-    if slot_id is not None:
-        slots = [slot_id]
+    if parkingslot_id is not None:
+        slots = [parkingslot_id]
     else:
         slots = zone_dict[zone_name]["stalli"]
 
@@ -194,17 +194,17 @@ def plot3(
     data: pd.DataFrame,
     zone_dict: ZoneDictZoneDataMapping,
     zone_name: str = "all_map",
-    slot_id: int | None = None,
+    parkingslot_id: int | None = None,
     date: pd.Timestamp | None = None,
     hour_range: list[int] | None = None,
     data_type: str = "occupied_abusively",
 ) -> Figure:
-    if slot_id is not None:
-        if slot_id not in zone_dict[zone_name]["stalli"]:
-            raise ValueError(f"slot_id {slot_id} not in {zone_name}")
+    if parkingslot_id is not None:
+        if parkingslot_id not in zone_dict[zone_name]["stalli"]:
+            raise ValueError(f"Parking slot {parkingslot_id} not in {zone_name}")
 
-    if slot_id is not None:
-        slots = [slot_id]
+    if parkingslot_id is not None:
+        slots = [parkingslot_id]
     else:
         slots = zone_dict[zone_name]["stalli"]
 
