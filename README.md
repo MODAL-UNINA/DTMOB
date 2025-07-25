@@ -8,8 +8,6 @@ The results highlight the framework potential to improve urban mobility manageme
 ![Alt text](DT.png)
 
 
-
-
 ## Acknowledgments
 This work was partially supported by the PNRR project FAIR -  Future AI Research (PE00000013), Spoke 3, under the NRRP MUR program funded by the NextGenerationEU.
 This work was partially supported by PNRR Centro Nazionale HPC, Big Data e Quantum Computing, (CN 00000013) (CUP: E63C22000980007).
@@ -62,7 +60,7 @@ docker compose run --rm preprocessing
 
 this will start a new shell session in the generated container
 
-#### 1. Forecasting
+#### 1.1. Forecasting
 
 Three different configurations for the forecasting are available in the folder `code/preprocessing/configs/forecasting`:
 - [Transactions](./code/preprocessing/configs/forecasting/transactions.yml), for the parking meter transactions forecasting
@@ -79,7 +77,7 @@ where `$CONFIG` can be `transactions`, `amount`, or `roads` depending on the con
 
 The results are saved in the `results/preprocessing/forecasting` folder relative to the project folder.
 
-#### 2. Generation
+#### 1.2. Generation
 Three different configurations for the generation are available in the folder `code/preprocessing/configs/generation`:
 - [First scenario](./code/preprocessing/configs/generation/1stscenario.yml), for the first scenario generation
 - [Second scenario](./code/preprocessing/configs/generation/2ndscenario.yml), for the second scenario generation
@@ -95,7 +93,7 @@ where `$CONFIG` can be `1stscenario`, `2ndscenario`, or `3rdscenario` depending 
 
 The results are saved in the `results/preprocessing/generation` folder.
 
-#### 3. Scheduling
+#### 1.3. Scheduling
 For the agent scheduling the only configurable option is the date in the format `YYYY-MM-DD`.
 
 For example, to get the calendar for 12th January 2025, run the following:
