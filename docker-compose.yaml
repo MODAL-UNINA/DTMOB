@@ -38,7 +38,7 @@ services:
       - ./code/common:/code/common
       - ./data/webapp:/data:ro
       - ./logs/webapp:/logs
-      - staticnginx:/static
+      - ./static:/static
     environment:
       - PORT=${PORT:-8080}
       - TZ=${TZ:-UTC}
@@ -63,7 +63,7 @@ services:
     ports:
       - "${PORT:-8080}:${PORT:-8080}"
     volumes:
-      - staticnginx:/var/www/static:ro
+      - ./static:/var/www/static:ro
       - ./nginx/conf.d/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/templates/default.conf.template:/etc/nginx/templates/default.conf.template:ro
       - ./logs/nginx:/var/log/nginx
@@ -72,6 +72,3 @@ services:
       - TZ=${TZ:-UTC}
     depends_on:
       - webapp
-
-volumes:
-  staticnginx:

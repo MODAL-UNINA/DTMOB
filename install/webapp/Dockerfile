@@ -1,5 +1,8 @@
 FROM ubuntu:22.04
 
+ARG UID=1000
+ARG GID=1000
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
@@ -22,6 +25,9 @@ RUN apt-get update && \
         && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+RUN groupadd --gid ${GID} appuser && \
+    useradd -ms /bin/bash --uid ${UID} --gid ${GID} appuser
 
 COPY ./environment.yaml ./
 
@@ -53,6 +59,8 @@ RUN arch=$(uname -m) && \
     echo "export MAMBA_ROOT_PREFIX=/opt/conda" >> ~/.bashrc && \
     echo ". /opt/conda/etc/profile.d/mamba.sh" >> ~/.bashrc && \
     echo "conda activate appenv" >> ~/.bashrc
+
+USER appuser
 
 ENV PATH /opt/conda/envs/appenv/bin:$PATH
 

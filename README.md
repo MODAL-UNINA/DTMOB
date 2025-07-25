@@ -26,7 +26,7 @@ The weather and air quality data, which are open source, can be downloaded from 
 ## Installation
 
 ### 0. Prerequisites
-All the code can be executed through [Docker Engine](https://docs.docker.com/engine/). The reported installation instructions are valid with Ubuntu 22.04 LTS and similar.
+All the code can be executed through [Docker Engine](https://docs.docker.com/engine/) with Rootless mode enabled. The reported installation instructions are valid with Ubuntu 22.04 LTS and similar.
 
 For the execution of the scripts with a **CUDA-capable GPU**, we require the GPU and NVidia drivers compatible with **CUDA 12.1 or newer** and the installation of [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/index.html). Furthermore, given the large size of the models for the training, a GPU with at least 24 GB of VRAM is required for this example data. For the complete data and the model of the case study we need at least 48 GB of VRAM.
 
@@ -45,7 +45,7 @@ this will create two folders inside data: `preprocessing` and `webapp`.
 Run the following in a terminal at the main folder:
 
 ```sh
-docker compose build
+docker compose build --build-arg UID=$(id -u) --build-arg GID=$(id -g)
 ```
 
 this will build all the docker images necessary for the execution of each step.
