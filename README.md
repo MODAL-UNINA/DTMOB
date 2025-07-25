@@ -121,7 +121,7 @@ Open a web browser and navigate to: `http://localhost:8080`.
 
 
 ### 3. Interactive usage
-A descriptive usage of the DTMOB framework is provided as a Jupyter Notebook [here](./code/example_usage/DTMOB_example.ipynb). 
+A descriptive usage of the DTMOB framework is provided as a Jupyter Notebook [here](./notebooks/DTMOB_example.ipynb). 
 
 #### Runnability
 To make it runnable, you need to run the following command from the terminal:
