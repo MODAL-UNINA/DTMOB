@@ -117,3 +117,16 @@ This will start the web application and the nginx server in detached mode. All t
 
 #### Accessing the Web Interface
 Open a web browser and navigate to: `http://localhost:8080`.
+
+
+### 3. Interactive usage
+A descriptive usage of the DTMOB framework is provided as a Jupyter Notebook [here](./code/example_usage/DTMOB_example.ipynb). 
+
+#### Runnability
+To make it runnable, you need to run the following command from the terminal:
+
+```sh
+docker compose up -d interactive
+```
+
+then open the Jupyter Notebook in your browser at `http://localhost:8081/notebooks/DTMOB_example.ipynb`. It is possible to change the arguments in the notebook to show different configurations of the framework.

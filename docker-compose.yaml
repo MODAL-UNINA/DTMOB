@@ -57,6 +57,32 @@ services:
             - driver: nvidia
               count: 'all'
               capabilities: [gpu]
+
+  interactive:
+    build:
+      context: install/interactive
+    command: jupyter notebook --ip=0.0.0.0 --NotebookApp.token='' --NotebookApp.password=''
+    ports:
+      - "8081:8888"
+    restart: unless-stopped
+    volumes:
+      - ./notebooks:/code
+      - ./code/common:/code/common
+      - ./data/webapp:/data:ro
+    working_dir: /code
+    environment:
+      - TZ=${TZ:-UTC}
+      - CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:--1}
+      - CUDA_LAUNCH_BLOCKING=${CUDA_LAUNCH_BLOCKING:-1}
+      - DATA_DIR=/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 'all'
+              capabilities: [gpu]
+
   nginx:
     image: nginx:alpine
     restart: unless-stopped
