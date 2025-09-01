@@ -30,12 +30,12 @@ All the code can be executed through [Docker Engine](https://docs.docker.com/eng
 For the execution of the scripts with a **CUDA-capable GPU**, we require the GPU and NVidia drivers compatible with **CUDA 12.1 or newer** and the installation of [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/index.html). Furthermore, given the large size of the models for the training, a GPU with at least 24 GB of VRAM is required for this example data. For the complete data and the model of the case study we need at least 48 GB of VRAM.
 
 ### 1. Data download
-The available data for the execution of all the scripts is provided at the following [link](https://drive.google.com/file/d/13JeMKgjJ-B-nm7pmzQIX7jiOQi71Lcar/view?usp=drive_link) (approximate size: 5 GB uncompressed).
+The minimum data for the execution of all the scripts is provided at the following [link](https://doi.org/10.5281/zenodo.17018385) (approximate size: 5 GB uncompressed).
 
 Download the zip file in the `data/` folder and unzip it with the following command from the terminal:
 
 ```sh
-unzip Data_DTMOB1.2.zip
+unzip DTMOB_minimum.zip
 ```
 
 this will create two folders inside data: `preprocessing` and `webapp`.
